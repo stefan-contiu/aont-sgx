@@ -5,15 +5,9 @@
 #include <math.h>
 
 #include <fstream>
-
+#include <cstring>
 
 int BLOCK_SIZE_BYTES = 256 * 1024; // 256 KB
-
-int functional_tests()
-{
-    printf("AONT Client =========== \n");
-    srand (time(NULL));
-}
 
 int write_file(
         std::string local_file_name,
@@ -23,7 +17,6 @@ int write_file(
     // generate a random AES key : FK
     unsigned char* FK = gen_random_bytestream(32);
     printf("File Key : "); print_hex(FK, 32);
-
 
     // read file
     std::ifstream in_file(local_file_name.c_str(), std::ifstream::binary);
@@ -41,34 +34,59 @@ int write_file(
     in_file.seekg(0);
     char* block = new char [BLOCK_SIZE_BYTES];
 
-    unsigned char* tail = (unsigned char*) malloc(32);
+    unsigned char* tail_fk = (unsigned char*) malloc(32);
+    memcpy(FK, tail, 32);
+
+    unsigned char* tail_bi = (unsigned char*) malloc(32);
+    // copy block index in byte array
 
     while(in_file)
     {
         in_file.read(block, BLOCK_SIZE_BYTES);
         int read_bytes = in_file.gcount();
+
+        // TODO : symm encrypt the block by using FK, the rest of
+        // operations should make use of the enc_block
+
+
+        // get hash of file and xor it to the tail
+        unsigned char* block_sha = (unsigned char*) malloc(32);
+        sgx_sha256((unsigned char*)block, read_bytes, block_sha);
+        for(int i=0; i<32; i++) tail_fk[i] ^= block_sha[i];
+
+        //
         if (current_block == over_encrypted_block)
         {
             printf("OEB ");
+            // over encrypt the block
+
+
+            unsigned char* enc_block_sha = (unsigned char*) malloc(32);;
+            sgx_sha256((unsigned char*)block, read_bytes, block_sha);
+            for(int i=0; i<32; i++) tail_fk[i] ^= block_sha[i];
+
+            // encrypt the block and get sha
+            // xor it to the tail_bi
         }
+        else
+        {
+            // for the rest of the blocks just use the ciphertext sha
+            for(int i=0; i<32; i++) tail_bi[i] ^= block_sha[i];
+        }
+        free(block_sha);
+
+
         printf("Read block of %d\n", read_bytes);
-
-        // get hash of file
-        unsigned char* block_sha;
-        sgx_sha256((unsigned char*)block, read_bytes, block_sha);
-
-        // xor each hash with the tail
-
 
         current_block++;
     }
 
     in_file.close();
 
-
-    // aont the blocks to hide the FK (tail 1)
-
-    // choose randomly a block
+    free(block);
+    free(FK);
+    free(tail_fk);
+    free(tail_bi);
 
     // over-encrypt the block with the GK
 
@@ -87,8 +105,15 @@ int read_file()
     return 0;
 }
 
+int functional_tests()
+{
+    printf("AONT Client =========== \n");
+    srand (time(NULL));
+    write_file("file.dat", "", "");
+    read_file();
+}
+
 int main()
 {
     functional_tests();
-    write_file("file.dat", "", "");
 }
