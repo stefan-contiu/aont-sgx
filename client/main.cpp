@@ -41,13 +41,39 @@ void xor_into_array(unsigned char* src, unsigned char* array_to_xor, int size)
     }
 }
 
-int write_to_storage(std::string block_name, unsigned char* data, size_t size)
+void serialize_metadata_to_file(
+    char* file_name,
+    int blocks_count,
+    int enc_oeb_index_size,
+    unsigned char* tail_fk, // 32 bytes
+    unsigned char* tail_oeb, // 32 bytes
+    unsigned char* enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char* iv) // 32 bytes
 {
-    return 0;
+    std::string full_key_name(file_name);
+    full_key_name = "tmp_storage/" + full_key_name;
+    std::ofstream s(full_key_name);
+    s.write(reinterpret_cast<const char*>(&blocks_count), sizeof(blocks_count));
+    s.write(reinterpret_cast<const char*>(&enc_oeb_index_size), sizeof(enc_oeb_index_size));
+    s.write(reinterpret_cast<const char*>(tail_fk), 32);
+    s.write(reinterpret_cast<const char*>(tail_oeb), 32);
+    s.write(reinterpret_cast<const char*>(enc_oeb_index), enc_oeb_index_size);
+    s.write(reinterpret_cast<const char*>(iv), 32);
+    s.close();
 }
 
-int read_from_storage(std::string block_name)
+
+void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
+    std::string full_key_name = "tmp_storage/" + key;
+    std::ofstream s(full_key_name);
+    s.write(reinterpret_cast<const char*>(value), size);
+    s.close();
+}
+
+int read_from_storage(std::string key, unsigned char* value)
+{
+    // write from ./tmp_storage/
     return 0;
 }
 
@@ -94,6 +120,7 @@ int write_file(
 
     while(in_file)
     {
+        std::string block_name = local_file_name + "." + std::to_string(current_block);
         in_file.read(block, BLOCK_SIZE_BYTES);
         int read_bytes = in_file.gcount();
 
@@ -110,13 +137,16 @@ int write_file(
             sgx_aes_encrypt((unsigned char*) enc_block, read_bytes, GK, iv, enc_enc_block);
             sgx_sha256((unsigned char*)enc_enc_block, read_bytes, enc_enc_block_sha);
             xor_into_array(tail_bi, enc_enc_block_sha, 32);
+            write_to_storage(block_name, enc_enc_block, read_bytes);
         }
         else
         {
             xor_into_array(tail_bi, enc_block_sha, 32);
+            write_to_storage(block_name, enc_block, read_bytes);
         }
 
         printf("Read block of %d\n", read_bytes);
+
         current_block++;
     }
     in_file.close();
@@ -127,10 +157,16 @@ int write_file(
     sgx_aes_encrypt(tail_fk, 32, GK, iv, enc_tail_fk);
     sgx_aes_decrypt(tail_bi, 32, GK, iv, enc_tail_bi);
 
-    // push the data to the storage,
-    // metadata file: blocks count, tail_fk, tail_bk, enc_oeb_index, iv
-
-    // blocks files
+    // metadata file: blocks count, tail_fk (32), tail_bk (32), enc_oeb_index, iv (32)
+    std::string meta_file_name = local_file_name + ".metadata";
+    serialize_metadata_to_file(
+        (char*) meta_file_name.c_str(),
+        number_of_blocks,
+        enc_oeb_index_size,
+        enc_tail_fk, // 32 bytes
+        enc_tail_bi, // 32 bytes
+        enc_oeb_index, // enc_oeb_index_size bytes
+        iv);
 
     free(FK);
     free(block);
@@ -144,7 +180,7 @@ int write_file(
     return 0;
 }
 
-int read_file()
+int read_file(std::string file_name, unsigned char* GK, std::string local_dest_name)
 {
     // read file metadata
 
@@ -170,7 +206,8 @@ int functional_tests()
     unsigned char* epk = gen_random_bytestream(32);
 
     write_file("file.dat", gk, rsaPublicKey, strlen(rsaPublicKey));
-    read_file();
+
+    read_file("file.dat", gk, "temp.dat");
 }
 
 int main()
