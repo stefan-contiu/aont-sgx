@@ -6,6 +6,8 @@
 
 #include <fstream>
 #include <cstring>
+#include <vector>
+#include <tuple>
 
 char rsaPublicKey[]="-----BEGIN PUBLIC KEY-----\n"\
 "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy8Dbv8prpJ/0kKhlGeJY\n"\
@@ -28,9 +30,12 @@ void long_to_byte_array(unsigned long n, unsigned char* bytes, size_t bytes_size
     bytes[3] = n & 0xFF;
 }
 
-void byte_array_to_long(unsigned char* bytes, unsigned long n)
+void byte_array_to_long(unsigned char* bytes, unsigned long* n)
 {
-    // TODO : ...
+    *n = ((bytes[0] << 24)
+         +(bytes[1] << 16)
+         +(bytes[2] << 8)
+         +(bytes[3]));
 }
 
 void xor_into_array(unsigned char* src, unsigned char* array_to_xor, int size)
@@ -105,6 +110,7 @@ void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
     std::ifstream s(full_key_name);
     s.seekg(0, std::ifstream::end);
     int file_size = s.tellg();
+    s.seekg(0);
     (*value) = (unsigned char*) malloc(file_size);
     s.read(reinterpret_cast<char*>(*value), file_size);
     (*p_size) = file_size;
@@ -143,11 +149,12 @@ int write_file(
 
     // initialize Tail 1 (hides the FK)
     unsigned char* tail_fk = (unsigned char*) malloc(32);
-    memcpy(FK, tail_fk, 32);
+    memcpy(tail_fk, FK, 32);
 
     // initialize Tail 2 (hides the OEB)
     unsigned char* tail_bi = (unsigned char*) malloc(32);
     long_to_byte_array((unsigned long) over_encrypted_block, tail_bi, 32);
+
     // encrypt the index of the over-encrypted-block by enclave_public_key
     unsigned char* enc_oeb_index = (unsigned char*) malloc(1024);
     int enc_oeb_index_size = rsa_encryption(tail_bi, 42, epk, epk_size, enc_oeb_index);
@@ -247,6 +254,8 @@ int read_file(std::string file_name, unsigned char* GK, std::string local_dest_n
     unsigned char* aont_oeb = (unsigned char*) malloc(32);
     memcpy(aont_oeb, tail_bi, 32);
 
+    std::vector<std::tuple<unsigned char*, int>> blocks;
+
     // get all the blocks
     for(int i=0; i<number_of_blocks; i++)
     {
@@ -254,28 +263,81 @@ int read_file(std::string file_name, unsigned char* GK, std::string local_dest_n
         size_t block_size;
         std::string block_name = file_name + "." + std::to_string(i);
         read_from_storage(block_name, &enc_block, &block_size);
-
         // get hash of encrypted block
         sgx_sha256(enc_block, block_size, enc_block_sha);
         xor_into_array(aont_oeb, enc_block_sha, 32);
+        blocks.push_back(std::make_tuple(enc_block, block_size));
 
         printf("Read Block %d\n", (int) block_size);
     }
 
     // do a reverse AONT to find out OEB index
-    long index_of_oeb;
-    byte_array_to_long(aont_oeb, *index_of_oeb)
+    unsigned long index_of_oeb;
+    byte_array_to_long(aont_oeb, &index_of_oeb);
+    printf("Over Encrypted Block Index : %d\n", (int)index_of_oeb);
 
-    // get from storage the over encrypted block
-    // ...
+    // fk = t_bi ^ t_fk ^ x4 ^ h4 ^ bi
+    xor_into_array(tail_fk, tail_bi, 32);
+    xor_into_array(tail_fk, aont_oeb, 32);
 
-    // do a reverse AONT to find out the FK
+    unsigned char* enc_block = std::get<0>(blocks[index_of_oeb]);
+    size_t block_size = std::get<1>(blocks[index_of_oeb]);
+    sgx_sha256(enc_block, block_size, enc_block_sha);
+    xor_into_array(tail_fk, enc_block_sha, 32);
 
-    // decrypt each block by using FK
+    // decrypt over encrypted block by GK
+    unsigned char* enc_enc_block = (unsigned char*) malloc(block_size);
+    sgx_aes_decrypt(enc_block, block_size, GK, iv, enc_enc_block);
+
+    unsigned char* enc_enc_block_sha = (unsigned char*) malloc(32);
+    sgx_sha256(enc_enc_block, block_size, enc_enc_block_sha);
+    xor_into_array(tail_fk, enc_enc_block_sha, 32);
+
+    // get FK and decrypt file
+    print_hex(tail_fk, 32);
+    std::ofstream s(local_dest_name);
+    for(int i=0; i<blocks.size(); i++)
+    {
+        int b_size = std::get<1>(blocks[i]);
+        unsigned char* block = (unsigned char*) malloc(b_size);
+
+        if (i != index_of_oeb)
+        {
+            sgx_aes_decrypt(std::get<0>(blocks[i]), b_size, tail_fk, iv, block);
+        }
+        else
+        {
+            sgx_aes_decrypt(enc_enc_block, block_size, tail_fk, iv, block);
+        }
+        s.write(reinterpret_cast<const char*>(block), b_size);
+    }
+    s.close();
 
     // todo : deallocate
+    // free() ...
 
     return 0;
+}
+
+void re_key()
+{
+    // get all manifests
+
+    // deserialize them
+
+    // sgx----------------------
+
+    // ----- decrypt OEB index
+
+    // ----- ocall bring k random blocks
+
+    // ----- decrypt oeb
+
+    // ----- chose a different oeb, encrypt it...
+
+    // ----- for the rest of k random blocks do the xor transform
+
+    // ----- modify the file index
 }
 
 int functional_tests()
