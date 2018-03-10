@@ -28,7 +28,7 @@ void long_to_byte_array(unsigned long n, unsigned char* bytes, size_t bytes_size
     bytes[3] = n & 0xFF;
 }
 
-void byte_array_to_long()
+void byte_array_to_long(unsigned char* bytes, unsigned long n)
 {
     // TODO : ...
 }
@@ -62,6 +62,34 @@ void serialize_metadata_to_file(
     s.close();
 }
 
+void deserialize_metadata_file(
+    char* file_name,
+    int* p_blocks_count,
+    int* p_enc_oeb_index_size,
+    unsigned char** tail_fk, // 32 bytes
+    unsigned char** tail_oeb, // 32 bytes
+    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char** iv)
+{
+    std::string full_key_name(file_name);
+    full_key_name = "tmp_storage/" + full_key_name;
+    std::ifstream s(full_key_name);
+
+    s.read(reinterpret_cast<char*>(p_blocks_count), sizeof((*p_blocks_count)));
+    s.read(reinterpret_cast<char*>(p_enc_oeb_index_size), sizeof((*p_enc_oeb_index_size)));
+
+    (*tail_fk) = (unsigned char*) malloc(32);
+    (*tail_oeb) = (unsigned char*) malloc(32);
+    (*enc_oeb_index) = (unsigned char*) malloc(*p_enc_oeb_index_size);
+    (*iv) = (unsigned char*) malloc(32);
+
+    s.read(reinterpret_cast<char*>(*tail_fk), 32);
+    s.read(reinterpret_cast<char*>(*tail_oeb), 32);
+    s.read(reinterpret_cast<char*>(*enc_oeb_index), *p_enc_oeb_index_size);
+    s.read(reinterpret_cast<char*>(*iv), 32);
+
+    s.close();
+}
 
 void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
@@ -71,10 +99,16 @@ void write_to_storage(std::string key, unsigned char* value, size_t size)
     s.close();
 }
 
-int read_from_storage(std::string key, unsigned char* value)
+void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
-    // write from ./tmp_storage/
-    return 0;
+    std::string full_key_name = "tmp_storage/" + key;
+    std::ifstream s(full_key_name);
+    s.seekg(0, std::ifstream::end);
+    int file_size = s.tellg();
+    (*value) = (unsigned char*) malloc(file_size);
+    s.read(reinterpret_cast<char*>(*value), file_size);
+    (*p_size) = file_size;
+    s.close();
 }
 
 int write_file(
@@ -155,7 +189,7 @@ int write_file(
     unsigned char* enc_tail_fk = (unsigned char*) malloc(32);
     unsigned char* enc_tail_bi = (unsigned char*) malloc(32);
     sgx_aes_encrypt(tail_fk, 32, GK, iv, enc_tail_fk);
-    sgx_aes_decrypt(tail_bi, 32, GK, iv, enc_tail_bi);
+    sgx_aes_encrypt(tail_bi, 32, GK, iv, enc_tail_bi);
 
     // metadata file: blocks count, tail_fk (32), tail_bk (32), enc_oeb_index, iv (32)
     std::string meta_file_name = local_file_name + ".metadata";
@@ -182,17 +216,64 @@ int write_file(
 
 int read_file(std::string file_name, unsigned char* GK, std::string local_dest_name)
 {
+    int number_of_blocks;
+    int enc_oeb_index_size;
+    unsigned char* enc_tail_fk;
+    unsigned char* enc_tail_bi;
+    unsigned char* enc_oeb_index;
+    unsigned char* iv;
+
     // read file metadata
+    std::string meta_file_name = file_name + ".metadata";
+    deserialize_metadata_file(
+        (char*) meta_file_name.c_str(),
+        &number_of_blocks,
+        &enc_oeb_index_size,
+        &enc_tail_fk, // 32 bytes
+        &enc_tail_bi, // 32 bytes
+        &enc_oeb_index, // enc_oeb_index_size bytes
+        &iv);
+
+    printf("Reading File ----------- \n");
+    printf("Blocks Count %d\n", number_of_blocks);
+
+    // decrypt metadata by GK
+    unsigned char* tail_fk = (unsigned char*) malloc(32);
+    unsigned char* tail_bi = (unsigned char*) malloc(32);
+    sgx_aes_decrypt(enc_tail_fk, 32, GK, iv, tail_fk);
+    sgx_aes_decrypt(enc_tail_bi, 32, GK, iv, tail_bi);
+
+    unsigned char* enc_block_sha = (unsigned char*) malloc(32);
+    unsigned char* aont_oeb = (unsigned char*) malloc(32);
+    memcpy(aont_oeb, tail_bi, 32);
 
     // get all the blocks
+    for(int i=0; i<number_of_blocks; i++)
+    {
+        unsigned char* enc_block;
+        size_t block_size;
+        std::string block_name = file_name + "." + std::to_string(i);
+        read_from_storage(block_name, &enc_block, &block_size);
 
-    // decrypt the tails by using GK
+        // get hash of encrypted block
+        sgx_sha256(enc_block, block_size, enc_block_sha);
+        xor_into_array(aont_oeb, enc_block_sha, 32);
+
+        printf("Read Block %d\n", (int) block_size);
+    }
 
     // do a reverse AONT to find out OEB index
+    long index_of_oeb;
+    byte_array_to_long(aont_oeb, *index_of_oeb)
+
+    // get from storage the over encrypted block
+    // ...
 
     // do a reverse AONT to find out the FK
 
     // decrypt each block by using FK
+
+    // todo : deallocate
 
     return 0;
 }
@@ -206,7 +287,6 @@ int functional_tests()
     unsigned char* epk = gen_random_bytestream(32);
 
     write_file("file.dat", gk, rsaPublicKey, strlen(rsaPublicKey));
-
     read_file("file.dat", gk, "temp.dat");
 }
 
