@@ -8,6 +8,10 @@
 #include <cstring>
 #include <vector>
 #include <tuple>
+#include <experimental/filesystem>
+
+#include <iostream>
+namespace fs = std::experimental::filesystem::v1;
 
 char rsaPublicKey[]="-----BEGIN PUBLIC KEY-----\n"\
 "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAy8Dbv8prpJ/0kKhlGeJY\n"\
@@ -18,6 +22,35 @@ char rsaPublicKey[]="-----BEGIN PUBLIC KEY-----\n"\
 "PpY72+eVthKzpMeyHkBn7ciumk5qgLTEJAfWZpe4f4eFZj/Rc8Y8Jj2IS5kVPjUy\n"\
 "wQIDAQAB\n"\
 "-----END PUBLIC KEY-----\n";
+
+char rsaPrivateKey[]="-----BEGIN RSA PRIVATE KEY-----\n"\
+"MIIEowIBAAKCAQEAy8Dbv8prpJ/0kKhlGeJYozo2t60EG8L0561g13R29LvMR5hy\n"\
+"vGZlGJpmn65+A4xHXInJYiPuKzrKUnApeLZ+vw1HocOAZtWK0z3r26uA8kQYOKX9\n"\
+"Qt/DbCdvsF9wF8gRK0ptx9M6R13NvBxvVQApfc9jB9nTzphOgM4JiEYvlV8FLhg9\n"\
+"yZovMYd6Wwf3aoXK891VQxTr/kQYoq1Yp+68i6T4nNq7NWC+UNVjQHxNQMQMzU6l\n"\
+"WCX8zyg3yH88OAQkUXIXKfQ+NkvYQ1cxaMoVPpY72+eVthKzpMeyHkBn7ciumk5q\n"\
+"gLTEJAfWZpe4f4eFZj/Rc8Y8Jj2IS5kVPjUywQIDAQABAoIBADhg1u1Mv1hAAlX8\n"\
+"omz1Gn2f4AAW2aos2cM5UDCNw1SYmj+9SRIkaxjRsE/C4o9sw1oxrg1/z6kajV0e\n"\
+"N/t008FdlVKHXAIYWF93JMoVvIpMmT8jft6AN/y3NMpivgt2inmmEJZYNioFJKZG\n"\
+"X+/vKYvsVISZm2fw8NfnKvAQK55yu+GRWBZGOeS9K+LbYvOwcrjKhHz66m4bedKd\n"\
+"gVAix6NE5iwmjNXktSQlJMCjbtdNXg/xo1/G4kG2p/MO1HLcKfe1N5FgBiXj3Qjl\n"\
+"vgvjJZkh1as2KTgaPOBqZaP03738VnYg23ISyvfT/teArVGtxrmFP7939EvJFKpF\n"\
+"1wTxuDkCgYEA7t0DR37zt+dEJy+5vm7zSmN97VenwQJFWMiulkHGa0yU3lLasxxu\n"\
+"m0oUtndIjenIvSx6t3Y+agK2F3EPbb0AZ5wZ1p1IXs4vktgeQwSSBdqcM8LZFDvZ\n"\
+"uPboQnJoRdIkd62XnP5ekIEIBAfOp8v2wFpSfE7nNH2u4CpAXNSF9HsCgYEA2l8D\n"\
+"JrDE5m9Kkn+J4l+AdGfeBL1igPF3DnuPoV67BpgiaAgI4h25UJzXiDKKoa706S0D\n"\
+"4XB74zOLX11MaGPMIdhlG+SgeQfNoC5lE4ZWXNyESJH1SVgRGT9nBC2vtL6bxCVV\n"\
+"WBkTeC5D6c/QXcai6yw6OYyNNdp0uznKURe1xvMCgYBVYYcEjWqMuAvyferFGV+5\n"\
+"nWqr5gM+yJMFM2bEqupD/HHSLoeiMm2O8KIKvwSeRYzNohKTdZ7FwgZYxr8fGMoG\n"\
+"PxQ1VK9DxCvZL4tRpVaU5Rmknud9hg9DQG6xIbgIDR+f79sb8QjYWmcFGc1SyWOA\n"\
+"SkjlykZ2yt4xnqi3BfiD9QKBgGqLgRYXmXp1QoVIBRaWUi55nzHg1XbkWZqPXvz1\n"\
+"I3uMLv1jLjJlHk3euKqTPmC05HoApKwSHeA0/gOBmg404xyAYJTDcCidTg6hlF96\n"\
+"ZBja3xApZuxqM62F6dV4FQqzFX0WWhWp5n301N33r0qR6FumMKJzmVJ1TA8tmzEF\n"\
+"yINRAoGBAJqioYs8rK6eXzA8ywYLjqTLu/yQSLBn/4ta36K8DyCoLNlNxSuox+A5\n"\
+"w6z2vEfRVQDq4Hm4vBzjdi3QfYLNkTiTqLcvgWZ+eX44ogXtdTDO7c+GeMKWz4XX\n"\
+"uJSUVL5+CVjKLjZEJ6Qc2WZLl94xSwL71E41H4YciVnSCQxVc4Jw\n"\
+"-----END RSA PRIVATE KEY-----\n";
+
 
 int BLOCK_SIZE_BYTES = 256 * 1024; // 256 KB
 
@@ -94,6 +127,60 @@ void deserialize_metadata_file(
     s.read(reinterpret_cast<char*>(*iv), 32);
 
     s.close();
+}
+
+void deserialize_metadata_stream(
+    char* inputStream,
+    size_t inputStreamSize,
+    int* p_blocks_count,
+    int* p_enc_oeb_index_size,
+    unsigned char** tail_fk, // 32 bytes
+    unsigned char** tail_oeb, // 32 bytes
+    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char** iv)
+{
+    std::string ss(inputStream, inputStreamSize);
+    std::stringstream s(ss);
+    s.read(reinterpret_cast<char*>(p_blocks_count), sizeof((*p_blocks_count)));
+    printf("BLOCKS COUNT %d\n", *p_blocks_count);
+    s.read(reinterpret_cast<char*>(p_enc_oeb_index_size), sizeof((*p_enc_oeb_index_size)));
+
+    (*tail_fk) = (unsigned char*) malloc(32);
+    (*tail_oeb) = (unsigned char*) malloc(32);
+    (*enc_oeb_index) = (unsigned char*) malloc(*p_enc_oeb_index_size);
+    (*iv) = (unsigned char*) malloc(32);
+
+    s.read(reinterpret_cast<char*>(*tail_fk), 32);
+    s.read(reinterpret_cast<char*>(*tail_oeb), 32);
+    s.read(reinterpret_cast<char*>(*enc_oeb_index), *p_enc_oeb_index_size);
+    s.read(reinterpret_cast<char*>(*iv), 32);
+}
+
+void serialize_metadata_to_stream(
+    unsigned char** meta_stream,
+    size_t* p_meta_stream_size,
+    int blocks_count,
+    int enc_oeb_index_size,
+    unsigned char* tail_fk, // 32 bytes
+    unsigned char* tail_oeb, // 32 bytes
+    unsigned char* enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char* iv
+)
+{
+    std::stringstream s;
+    s.write(reinterpret_cast<const char*>(&blocks_count), sizeof(blocks_count));
+    s.write(reinterpret_cast<const char*>(&enc_oeb_index_size), sizeof(enc_oeb_index_size));
+    s.write(reinterpret_cast<const char*>(tail_fk), 32);
+    s.write(reinterpret_cast<const char*>(tail_oeb), 32);
+    s.write(reinterpret_cast<const char*>(enc_oeb_index), enc_oeb_index_size);
+    s.write(reinterpret_cast<const char*>(iv), 32);
+    *p_meta_stream_size = s.str().size();
+    *meta_stream = (unsigned char*) malloc(*p_meta_stream_size);
+    memcpy(*meta_stream, s.str().c_str(), *p_meta_stream_size);
+    print_hex(*meta_stream, 64);
+    //*meta_stream = (unsigned char*) s.str().c_str();
+
+    printf(">>>>>>>>>>>> The metadata stream is %d long\n", *p_meta_stream_size);
 }
 
 void write_to_storage(std::string key, unsigned char* value, size_t size)
@@ -313,31 +400,169 @@ int read_file(std::string file_name, unsigned char* GK, std::string local_dest_n
     }
     s.close();
 
-    // todo : deallocate
-    // free() ...
-
+    free(enc_tail_fk);
+    free(enc_tail_bi);
+    free(enc_oeb_index);
+    free(iv);
     return 0;
 }
 
-void re_key()
+
+void get_all_metadata_keys(std::vector<std::string>& metadata_keys)
 {
-    // get all manifests
+    metadata_keys.clear();
+    std::string path = "tmp_storage/";
+    for (auto & p : fs::directory_iterator(path))
+        if (p.path().string().find(".metadata") != std::string::npos)
+        {
+            std::string s = p.path().string();
+            s.replace(0, path.size(), "");
+            metadata_keys.push_back(s);
+        }
+}
 
-    // deserialize them
+void ocall_get_block(char* blockName, unsigned char** data, size_t* p_size)
+{
+    std::string key(blockName);
+    read_from_storage(key, data, p_size);
+}
 
-    // sgx----------------------
+void ocall_put_block(char* blockName, unsigned char* data, size_t size)
+{
+    std::string key(blockName);
+    write_to_storage(key, data, size);
+}
 
-    // ----- decrypt OEB index
+void ecall_worker_re_key(unsigned char* old_gk, unsigned char* new_gk,
+    char* key,
+    char* metadata, size_t meta_size)
+{
+    int blocks_count;
+    int enc_oeb_index_size;
+    unsigned char* tail_fk;
+    unsigned char* tail_bi;
+    unsigned char* enc_oeb_index;
+    unsigned char* iv;
 
-    // ----- ocall bring k random blocks
+    // deserialize metadata
+    deserialize_metadata_stream(
+        metadata,
+        meta_size,
+        &blocks_count,
+        &enc_oeb_index_size,
+        &tail_fk, // 32 bytes
+        &tail_bi, // 32 bytes
+        &enc_oeb_index, // enc_oeb_index_size bytes
+        &iv);
 
-    // ----- decrypt oeb
+    printf("SGX says %d blocks\n", blocks_count);
 
-    // ----- chose a different oeb, encrypt it...
+    // decrypt OEB index
+    long unsigned oeb;
+    unsigned char* dec_oeb_index = (unsigned char*) malloc(64);
+    rsa_decryption(enc_oeb_index, enc_oeb_index_size,
+        rsaPrivateKey, strlen(rsaPrivateKey),
+        dec_oeb_index);
+    byte_array_to_long(dec_oeb_index, &oeb);
+    printf("SGX says OEB %d\n", (int)oeb);
 
-    // ----- for the rest of k random blocks do the xor transform
+    // bring the over-encrypted block in the enclave (OCALL)
+    std::string blockName = std::string(key);
+    // strip .metadata suffix and add block index
+    blockName.replace(blockName.size() - 9, 9, "");
+    blockName = blockName + "." + std::to_string(oeb);
+    std::cout << "fetch " << blockName << "\n";
 
-    // ----- modify the file index
+    unsigned char* enc_block;
+    size_t block_size;
+    ocall_get_block((char*)blockName.c_str(), &enc_block, &block_size);
+
+    // re-encrypt it
+    printf("SGX says Returned block is %d in size.\n", (int)block_size);
+
+    // decrypt it by using old_gk
+    unsigned char* dec_enc_block = (unsigned char*) malloc(block_size);
+    sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+
+    // encrypt it by using new_gk
+    unsigned char* enc_enc_block = (unsigned char*) malloc(block_size);
+    sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
+
+    // push it back to the storage (OCALL)
+    ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
+
+    // encrypt the tail by using the group_key
+    unsigned char* dec_tail_fk = (unsigned char*) malloc(32);
+    unsigned char* dec_tail_bi = (unsigned char*) malloc(32);
+    sgx_aes_decrypt(tail_fk, 32, old_gk, iv, dec_tail_fk);
+    sgx_aes_decrypt(tail_bi, 32, old_gk, iv, dec_tail_bi);
+
+    // adjust the tail_bi, xor with the old and new block hash
+    unsigned char* enc_block_sha = (unsigned char*) malloc(32);
+    sgx_sha256(enc_block, block_size, enc_block_sha);
+    xor_into_array(dec_tail_bi, enc_block_sha, 32);
+
+    unsigned char* enc_enc_block_sha = (unsigned char*) malloc(32);
+    sgx_sha256(enc_enc_block, block_size, enc_enc_block_sha);
+    xor_into_array(dec_tail_bi, enc_enc_block_sha, 32);
+
+    unsigned char* new_tail_fk = (unsigned char*) malloc(32);
+    unsigned char* new_tail_bi = (unsigned char*) malloc(32);
+    sgx_aes_encrypt(dec_tail_fk, 32, new_gk, iv, new_tail_fk);
+    sgx_aes_encrypt(dec_tail_bi, 32, new_gk, iv, new_tail_bi);
+
+    // metadata file: blocks count, tail_fk (32), tail_bk (32), enc_oeb_index, iv (32)
+    std::string meta_file_name = blockName + ".metadata";
+    unsigned char* meta_stream;
+    size_t meta_stream_size;
+    printf("Blocks Count %d\n", blocks_count);
+    serialize_metadata_to_stream(
+        &meta_stream,
+        &meta_stream_size,
+        blocks_count,
+        enc_oeb_index_size,
+        new_tail_fk, // 32 bytes
+        new_tail_bi, // 32 bytes
+        enc_oeb_index, // enc_oeb_index_size bytes
+        iv);
+
+    // push back metadata to the storage
+    ocall_put_block(key, meta_stream, meta_stream_size);
+
+    // clear up stuff
+    free(dec_enc_block);
+    free(enc_enc_block);
+    free(tail_fk);
+    free(tail_bi);
+    free(enc_oeb_index);
+    free(iv);
+    free(dec_tail_fk);
+    free(dec_tail_bi);
+    free(new_tail_fk);
+    free(new_tail_bi);
+    free(meta_stream);
+}
+
+void re_key(unsigned char* old_gk, unsigned char* new_gk)
+{
+    std::vector<std::string> metadata;
+    get_all_metadata_keys(metadata);
+
+    // read all metadata from files
+    for(int i=0; i<metadata.size(); i++)
+    {
+        printf("Processing [%s]\n", metadata[i].c_str());
+
+        unsigned char* meta_stream;
+        size_t meta_size;
+        read_from_storage(metadata[i], &meta_stream, &meta_size);
+        //print_hex(meta_stream, 64);
+
+        // go to SGX
+        ecall_worker_re_key(old_gk, new_gk,
+            (char*) metadata[i].c_str(),
+            (char*) meta_stream, meta_size);
+    }
 }
 
 int functional_tests()
@@ -346,10 +571,13 @@ int functional_tests()
     srand (time(NULL));
 
     unsigned char* gk = gen_random_bytestream(32);
-    unsigned char* epk = gen_random_bytestream(32);
 
     write_file("file.dat", gk, rsaPublicKey, strlen(rsaPublicKey));
     read_file("file.dat", gk, "temp.dat");
+
+    unsigned char* new_gk = gen_random_bytestream(32);
+    re_key(gk, new_gk);
+    read_file("file.dat", new_gk, "temp_rekeyed.dat");
 }
 
 int main()
