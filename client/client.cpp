@@ -8,6 +8,7 @@
 #include <sstream>
 #include <math.h>
 #include <tuple>
+#include <set>
 
 std::pair<double, double> write_file_aes(
     std::string local_file_name,
@@ -16,6 +17,7 @@ std::pair<double, double> write_file_aes(
     char* epk, size_t epk_size,
     int BLOCK_SIZE_BYTES)
 {
+    /*
     double aes_time = 0;
     double storage_time = 0;
 
@@ -72,6 +74,7 @@ std::pair<double, double> write_file_aes(
     serialize_metadata_to_file(
         (char*) meta_file_name.c_str(),
         number_of_blocks,
+        1,
         0,
         (unsigned char*)"", // 32 bytes
         (unsigned char*)"", // 32 bytes
@@ -81,6 +84,7 @@ std::pair<double, double> write_file_aes(
     storage_time += (double)(_end - _begin) / CLOCKS_PER_SEC;
 
     return std::make_pair(storage_time, aes_time);
+    */
 }
 
 std::pair<double, double> write_file(
@@ -88,28 +92,19 @@ std::pair<double, double> write_file(
         std::string s,
         unsigned char* GK,
         char* epk, size_t epk_size,
-        int BLOCK_SIZE_BYTES)
+        int BLOCK_SIZE_BYTES,
+        int SE_BLOCKS_COUNT)
 {
     // generate a random AES key : FK
     unsigned char* FK = gen_random_bytestream(32);
     unsigned char* iv = gen_random_bytestream(32);
 
-    //print_hex(FK, 32);
-    //printf("File Key : "); print_hex(FK, 32);
-
     int size = s.length();
     std::stringstream in_file(s);
-    // read file
-    //std::ifstream in_file(local_file_name.c_str(), std::ifstream::binary);
-    //in_file.seekg(0, std::ifstream::end);
-    //int size = in_file.tellg();
 
     int number_of_blocks = ceil((double)size / (double)BLOCK_SIZE_BYTES);
-    int over_encrypted_block = rand() % number_of_blocks;
-
-    //printf("File size : %d\n", size);
-    //printf("Number of blocks : %d\n", number_of_blocks);
-    //printf("Over Encrypted Block : %d\n", over_encrypted_block);
+    int over_encrypted_block[SE_BLOCKS_COUNT];
+    printf("[write] total blocks : %d. Super encrypted blocsk : %d\n", number_of_blocks, SE_BLOCKS_COUNT);
 
     int current_block = 0;
     in_file.seekg(0);
@@ -123,13 +118,40 @@ std::pair<double, double> write_file(
     unsigned char* tail_fk = (unsigned char*) malloc(32);
     memcpy(tail_fk, FK, 32);
 
+    // initialize tails
+    unsigned char* tails_se[SE_BLOCKS_COUNT];
+    unsigned char* tails_sgx[SE_BLOCKS_COUNT];
+    std::set<int> super_encrypted_blocks_index;
+    for(int i=0; i<SE_BLOCKS_COUNT; i++)
+    {
+        // get a random block, make sure it is not already taken
+        // TODO : maybe just the set is enough?
+        do
+        {
+            over_encrypted_block[i] = rand() % number_of_blocks;
+        }
+        while(super_encrypted_blocks_index.find(over_encrypted_block[i]) !=
+            super_encrypted_blocks_index.end());
+        printf("[write] super encrypt block index : %d\n", over_encrypted_block[i]);
+        super_encrypted_blocks_index.insert(over_encrypted_block[i]);
+
+        // initialize the tail_read with it
+        tails_se[i] = (unsigned char *) malloc(32);
+        long_to_byte_array((unsigned long) over_encrypted_block[i], tails_se[i], 32);
+
+        // initialize the tail_sgx with it
+        tails_sgx[i] = (unsigned char*) malloc(1024);
+        int enc_oeb_index_size = rsa_encryption(tails_se[i], 32, epk, epk_size, tails_sgx[i]);
+        printf("[write] a single TAILS_SGX item has length : %d\n", enc_oeb_index_size); // 256 bytes
+    }
+
     // initialize Tail 2 (hides the OEB)
-    unsigned char* tail_bi = (unsigned char*) malloc(32);
-    long_to_byte_array((unsigned long) over_encrypted_block, tail_bi, 32);
+    //unsigned char* tail_bi = (unsigned char*) malloc(32);
+    //long_to_byte_array((unsigned long) over_encrypted_block, tail_bi, 32);
 
     // encrypt the index of the over-encrypted-block by enclave_public_key
-    unsigned char* enc_oeb_index = (unsigned char*) malloc(1024);
-    int enc_oeb_index_size = rsa_encryption(tail_bi, 42, epk, epk_size, enc_oeb_index);
+    //unsigned char* enc_oeb_index = (unsigned char*) malloc(1024);
+    //int enc_oeb_index_size = rsa_encryption(tail_bi, 42, epk, epk_size, enc_oeb_index);
 
     double storage_time = 0;
     double aes_time = 0;
@@ -144,16 +166,36 @@ std::pair<double, double> write_file(
             break;
         }
 
-        clock_t _begin = clock();
-        // encrypt block by FK and get its hash
-        sgx_aes_encrypt((unsigned char*) block, read_bytes, FK, iv, enc_block);
-        clock_t _end = clock();
-        aes_time += (double)(_end - _begin) / CLOCKS_PER_SEC;
+        printf("[write] -> read block  : %d\n", current_block); // 256 bytes
 
-        sgx_sha256(enc_block, read_bytes, enc_block_sha);
-        // xor to Tail 1
-        xor_into_array(tail_fk, enc_block_sha, 32);
+        // encrypt block by FK
+        {
+            clock_t _begin = clock();
+            sgx_aes_encrypt((unsigned char*) block, read_bytes, FK, iv, enc_block);
+            clock_t _end = clock();
+            aes_time += (double)(_end - _begin) / CLOCKS_PER_SEC;
+        }
 
+        // chain encrypted block hash
+        {
+            sgx_sha256(enc_block, read_bytes, enc_block_sha);
+            xor_into_array(tail_fk, enc_block_sha, 32);
+        }
+
+        if (super_encrypted_blocks_index.find(current_block) !=
+            super_encrypted_blocks_index.end())
+        {
+            printf("[write] -> super encrypt this block  : %d\n", current_block); // 256 bytes
+
+            // super encrypt the block
+            {
+                clock_t _begin = clock();
+                sgx_aes_encrypt((unsigned char*) enc_block, read_bytes, GK, iv, enc_enc_block);
+                clock_t _end = clock();
+                aes_time += (double)(_end - _begin) / CLOCKS_PER_SEC;
+            }
+        }
+        /*
         // xor to Tail 2
         if (current_block == over_encrypted_block)
         {
@@ -184,7 +226,7 @@ std::pair<double, double> write_file(
         }
         clock_t xend = clock();
         storage_time += (double)(xend - xbegin) / CLOCKS_PER_SEC;
-
+*/
 
         current_block++;
     }
@@ -192,6 +234,7 @@ std::pair<double, double> write_file(
 
     clock_t begin = clock();
 
+/*
     // encrypt the tail by using the group_key
     unsigned char* enc_tail_fk = (unsigned char*) malloc(32);
     unsigned char* enc_tail_bi = (unsigned char*) malloc(32);
@@ -200,9 +243,11 @@ std::pair<double, double> write_file(
 
     // metadata file: blocks count, tail_fk (32), tail_bk (32), enc_oeb_index, iv (32)
     std::string meta_file_name = local_file_name + ".metadata";
+
     serialize_metadata_to_file(
         (char*) meta_file_name.c_str(),
         number_of_blocks,
+        1,
         enc_oeb_index_size,
         enc_tail_fk, // 32 bytes
         enc_tail_bi, // 32 bytes
@@ -223,6 +268,8 @@ std::pair<double, double> write_file(
     free(enc_oeb_index);
 
     return std::make_pair(storage_time + meta_time, aes_time);
+    */
+    return std::make_pair(0, 0);
 }
 
 std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK, std::string local_dest_name,

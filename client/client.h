@@ -41,9 +41,13 @@ static char rsaPrivateKey[]="-----BEGIN RSA PRIVATE KEY-----\n"\
 "uJSUVL5+CVjKLjZEJ6Qc2WZLl94xSwL71E41H4YciVnSCQxVc4Jw\n"\
 "-----END RSA PRIVATE KEY-----\n";
 
-std::pair<double, double> write_file(std::string local_file_name, std::string s,
-    unsigned char* GK, char* epk, size_t epk_size
-    ,int BLOCK_SIZE_BYTES);
+std::pair<double, double> write_file(
+    std::string local_file_name,
+    std::string s,
+    unsigned char* GK,
+    char* epk, size_t epk_size,
+    int BLOCK_SIZE_BYTES,
+    int SE_BLOCKS_COUNT);
 
 std::pair<double, double> read_file(std::string file_name, unsigned char* GK, std::string local_dest_name,
     int BLOCK_SIZE_BYTES);

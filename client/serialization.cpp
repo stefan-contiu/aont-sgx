@@ -82,6 +82,7 @@ void serialize_metadata_to_stream(
     unsigned char** meta_stream,
     int* p_meta_stream_size,
     int blocks_count,
+    int se_blocks_count,
     int enc_oeb_index_size,
     unsigned char* tail_fk, // 32 bytes
     unsigned char* tail_oeb, // 32 bytes
@@ -122,10 +123,11 @@ void serialize_metadata_to_stream(
 void serialize_metadata_to_file(
     char* file_name,
     int blocks_count,
+    int se_blocks_count,
     int enc_oeb_index_size,
     unsigned char* tail_fk, // 32 bytes
-    unsigned char* tail_oeb, // 32 bytes
-    unsigned char* enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char* tails_se[32],
+    unsigned char* sgx_se[32],
     unsigned char* iv) // 32 bytes
 {
     std::string full_key_name(file_name);
@@ -137,20 +139,14 @@ void serialize_metadata_to_file(
         &m,
         &m_size,
         blocks_count,
+        se_blocks_count,
         enc_oeb_index_size,
         tail_fk, // 32 bytes
-        tail_oeb, // 32 bytes
-        enc_oeb_index, // enc_oeb_index_size bytes
+        tails_se[0], // 32 bytes
+        sgx_se[0], // enc_oeb_index_size bytes
         iv);
 
-    //printf("META SERIALIZE : "); print_hex(m, m_size);
-    //printf("SERIALLIZED META : %d\n", m_size);
     RedisCloud::PutBinary(file_name, m, m_size);
-
-    // old file implementation
-    //std::ofstream s(full_key_name);
-    //s.write(reinterpret_cast<const char*>(m), m_size);
-    //s.close();
 }
 
 void deserialize_metadata_file(

@@ -9,12 +9,7 @@ extern "C" {
 
 unsigned char* gen_random_bytestream(int n);
 
-static inline void print_hex(unsigned char *h, int l)
-{
-    for (int i=0; i<l; i++)
-        printf("%02X", h[i]);
-    printf("\n");
-}
+void xor_into_array(unsigned char* src, unsigned char* array_to_xor, int size);
 
 /* ------- RANDOM -------- */
 void sgx_random(int n, unsigned char b[]);
@@ -31,15 +26,15 @@ void sgx_aes_decrypt(unsigned char* ciphertext,
     unsigned char* plaintext);
 
 /* ------- SHA OPERATIONS ---------- */
-unsigned char* sgx_sha256(const unsigned char *d, 
-    size_t n, 
+unsigned char* sgx_sha256(const unsigned char *d,
+    size_t n,
     unsigned char *md);
 
 /* ------- RSA OPERATIONS ---------- */
 int rsa_encryption(unsigned char* plaintext, int plaintext_length,
     char* key, int key_length,
     unsigned char* ciphertext);
-    
+
 int rsa_decryption(unsigned char* ciphertext, int ciphertext_length,
     char* key, int key_length,
     unsigned char* plaintext);
