@@ -23,10 +23,10 @@ void serialize_metadata_to_file(
     char* file_name,
     int blocks_count,
     int se_blocks_count,
-    int enc_oeb_index_size,
     unsigned char* tail_fk, // 32 bytes
-    unsigned char* tails[32], // 32 bytes
-    unsigned char* sgx_se[32], // enc_oeb_index_size bytes
+    unsigned char* tail_sk, // 32 bytes
+    unsigned char* tails_se[32],
+    unsigned char* tail_sgx, //256 bytes
     unsigned char* iv); // 32 bytes
 
 extern void deserialize_metadata_file(
@@ -56,10 +56,10 @@ extern void serialize_metadata_to_stream(
     size_t* p_meta_stream_size,
     int blocks_count,
     int se_blocks_count,
-    int enc_oeb_index_size,
     unsigned char* tail_fk, // 32 bytes
-    unsigned char* tail_oeb, // 32 bytes
-    unsigned char* enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char* tail_sk, // 32 bytes
+    unsigned char* tails_se[32],
+    unsigned char* tail_sgx, //256 bytes
     unsigned char* iv);
 
 #endif
