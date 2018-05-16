@@ -49,7 +49,10 @@ std::pair<double, double> write_file(
     int BLOCK_SIZE_BYTES,
     int SE_BLOCKS_COUNT);
 
-std::pair<double, double> read_file(std::string file_name, unsigned char* GK, std::string local_dest_name,
+std::pair<double, double> read_file(
+    std::string key_name,
+    std::string& value,
+    unsigned char* GK,
     int BLOCK_SIZE_BYTES);
 
 std::pair<double, double> write_file_aes(

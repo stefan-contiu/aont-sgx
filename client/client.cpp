@@ -104,7 +104,6 @@ std::pair<double, double> write_file(
     std::stringstream in_file(s);
 
     int number_of_blocks = ceil((double)size / (double)BLOCK_SIZE_BYTES);
-    int over_encrypted_block[SE_BLOCKS_COUNT];
     printf("[write] total blocks : %d. Super encrypted blocsk : %d\n", number_of_blocks, SE_BLOCKS_COUNT);
 
     int current_block = 0;
@@ -131,20 +130,20 @@ std::pair<double, double> write_file(
     for(int i=0; i<SE_BLOCKS_COUNT; i++)
     {
         // get a random block, make sure it is not already taken
-        // TODO : maybe just the set is enough?
+        int over_encrypted_block;
         do
         {
-            over_encrypted_block[i] = rand() % number_of_blocks;
+            over_encrypted_block = rand() % number_of_blocks;
         }
-        while(super_encrypted_blocks_index.find(over_encrypted_block[i]) !=
+        while(super_encrypted_blocks_index.find(over_encrypted_block) !=
             super_encrypted_blocks_index.end());
-        printf("[write] super encrypt block index : %d\n", over_encrypted_block[i]);
-        super_encrypted_blocks_index.insert(over_encrypted_block[i]);
+        printf("[write] super encrypt block index : %d\n", over_encrypted_block);
+        super_encrypted_blocks_index.insert(over_encrypted_block);
 
         // initialize the tail_read with it
         tails_se[i] = (unsigned char *) malloc(32);
         unsigned char se_index_bytes[32];
-        long_to_byte_array((unsigned long) over_encrypted_block[i], se_index_bytes, 32);
+        long_to_byte_array((unsigned long) over_encrypted_block, se_index_bytes, 32);
         sgx_aes_encrypt((unsigned char*) se_index_bytes, 32, SK, iv, tails_se[i]);
     }
 
@@ -258,6 +257,7 @@ std::pair<double, double> write_file(
 std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK, std::string local_dest_name,
     int BLOCK_SIZE_BYTES)
 {
+    /*
     int number_of_blocks;
     int enc_oeb_index_size;
     unsigned char* enc_tail_fk;
@@ -308,16 +308,22 @@ std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK
     //s.close();
 
     return std::make_pair(storage_time, aes_time);
+    */
 }
 
-std::pair<double, double> read_file(std::string file_name, unsigned char* GK, std::string local_dest_name,
+
+std::pair<double, double> read_file(
+    std::string key_name,
+    std::string& value,
+    unsigned char* GK,
     int BLOCK_SIZE_BYTES)
 {
     int number_of_blocks;
-    int enc_oeb_index_size;
+    int number_of_super_encrypted_blocks;
     unsigned char* enc_tail_fk;
-    unsigned char* enc_tail_bi;
-    unsigned char* enc_oeb_index;
+    unsigned char* enc_tail_sk;
+    unsigned char* tails_se[32];
+    unsigned char* tail_sgx;    // will not be used by the reader
     unsigned char* iv;
 
     double storage_time;
@@ -326,15 +332,19 @@ std::pair<double, double> read_file(std::string file_name, unsigned char* GK, st
     clock_t begin = clock();
 
     // read file metadata
-    std::string meta_file_name = file_name + ".metadata";
+    std::string meta_file_name = key_name + ".metadata";
     deserialize_metadata_file(
         (char*) meta_file_name.c_str(),
         &number_of_blocks,
-        &enc_oeb_index_size,
+        &number_of_super_encrypted_blocks,
         &enc_tail_fk, // 32 bytes
-        &enc_tail_bi, // 32 bytes
-        &enc_oeb_index, // enc_oeb_index_size bytes
+        &enc_tail_sk, // 32 bytes
+        tails_se,
+        &tail_sgx,
         &iv);
+
+    printf("[read] total blocks : %d, super encrypted blocks : %d\n",
+        number_of_blocks, number_of_super_encrypted_blocks);
 
     //printf("Reading File With ----------- \n");
     //printf("Blocks Count %d\n", number_of_blocks);
@@ -346,41 +356,62 @@ std::pair<double, double> read_file(std::string file_name, unsigned char* GK, st
 
     // decrypt metadata by GK
     unsigned char* tail_fk = (unsigned char*) malloc(32);
-    unsigned char* tail_bi = (unsigned char*) malloc(32);
+    unsigned char* tail_sk = (unsigned char*) malloc(32);
     sgx_aes_decrypt(enc_tail_fk, 32, GK, iv, tail_fk);
-    sgx_aes_decrypt(enc_tail_bi, 32, GK, iv, tail_bi);
+    sgx_aes_decrypt(enc_tail_sk, 32, GK, iv, tail_sk);
 
     clock_t end = clock();
     storage_time += (double)(end - begin) / CLOCKS_PER_SEC;
 
-
+    // first goal : discover SK, perform an AONT on tail_sk
     unsigned char* enc_block_sha = (unsigned char*) malloc(32);
-    unsigned char* aont_oeb = (unsigned char*) malloc(32);
-    memcpy(aont_oeb, tail_bi, 32);
+    unsigned char* aont_sk = (unsigned char*) malloc(32);
+    memcpy(aont_sk, tail_sk, 32);
 
-
+/*
     std::vector<std::tuple<unsigned char*, int>> blocks;
+*/
 
     // get all the blocks
     for(int i=0; i<number_of_blocks; i++)
     {
-    //    printf("Reading %d\n", i);
         unsigned char* enc_block;
         size_t block_size;
-        std::string block_name = file_name + "." + std::to_string(i);
+        std::string block_name = key_name + "." + std::to_string(i);
 
-        clock_t rbegin = clock();
-        read_from_storage(block_name, &enc_block, &block_size);
-        clock_t rend = clock();
-        storage_time += (double)(rend - rbegin) / CLOCKS_PER_SEC;
+        // read block from storage
+        {
+            clock_t rbegin = clock();
+            read_from_storage(block_name, &enc_block, &block_size);
+            clock_t rend = clock();
+            storage_time += (double)(rend - rbegin) / CLOCKS_PER_SEC;
+        }
+        printf("[read] -> block %d downloaded\n", i);
 
         // get hash of encrypted block
-        sgx_sha256(enc_block, block_size, enc_block_sha);
-        xor_into_array(aont_oeb, enc_block_sha, 32);
-        blocks.push_back(std::make_tuple(enc_block, block_size));
+        {
+            sgx_sha256(enc_block, block_size, enc_block_sha);
+            xor_into_array(aont_sk, enc_block_sha, 32);
+        //blocks.push_back(std::make_tuple(enc_block, block_size));
     //    printf("Read Block %d\n", (int) block_size);
+        }
     }
 
+    // reveal SK
+    unsigned char SK[32];
+    memcpy(SK, aont_sk, 32);
+
+    // reveal the indexes of super encrypted blocks
+    for (int i=0; i<number_of_super_encrypted_blocks; i++)
+    {
+        unsigned char se_index_bytes[32];
+        sgx_aes_decrypt(tails_se[i], 32, SK, iv, se_index_bytes);
+        unsigned long se_index = 0;
+        byte_array_to_long(se_index_bytes, &se_index);
+        printf("[read] Super Encrypted Block Index : %d\n", (int)se_index);
+    }
+
+/*
     // do a reverse AONT to find out OEB index
     unsigned long index_of_oeb;
     byte_array_to_long(aont_oeb, &index_of_oeb);
@@ -431,22 +462,15 @@ std::pair<double, double> read_file(std::string file_name, unsigned char* GK, st
     }
     //s.close();
 
-    //printf("del fk\n");
     free(enc_tail_fk);
-    //printf("del bi\n");
     free(enc_tail_bi);
-    //printf("del iv\n");
     free(iv);
-    //printf("del oeb\n");
     free(enc_oeb_index);
-    //printf("del fk\n");
     free(tail_fk);
-    //printf("del bi\n");
     free(tail_bi);
-    //printf("enc sha\n");
     free(enc_block_sha);
-    //printf("aont oeb\n");
     free(aont_oeb);
 
     return std::make_pair(storage_time, aes_time);
+    */
 }

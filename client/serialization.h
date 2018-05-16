@@ -32,12 +32,12 @@ void serialize_metadata_to_file(
 extern void deserialize_metadata_file(
     char* file_name,
     int* p_blocks_count,
-    int* p_enc_oeb_index_size,
+    int* se_blocks_count,
     unsigned char** tail_fk, // 32 bytes
-    unsigned char** tail_oeb, // 32 bytes
-    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char** tail_sk, // 32 bytes
+    unsigned char* tails_se[32], // enc_oeb_index_size bytes
+    unsigned char** tail_sgx,
     unsigned char** iv);
-
 
 // Binary Stream Methods ----
 
@@ -45,10 +45,11 @@ extern void deserialize_metadata_stream(
     char* inputStream,
     size_t inputStreamSize,
     int* p_blocks_count,
-    int* p_enc_oeb_index_size,
+    int* se_blocks_count,
     unsigned char** tail_fk, // 32 bytes
-    unsigned char** tail_oeb, // 32 bytes
-    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char** tail_sk, // 32 bytes
+    unsigned char* tails_se[32], // enc_oeb_index_size bytes
+    unsigned char** tail_sgx,
     unsigned char** iv);
 
 extern void serialize_metadata_to_stream(

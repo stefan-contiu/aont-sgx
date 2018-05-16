@@ -48,32 +48,41 @@ void deserialize_metadata_stream(
     unsigned char* inputStream,
     int inputStreamSize,
     int* p_blocks_count,
-    int* p_enc_oeb_index_size,
-    unsigned char** tail_fk, // 32 bytes
-    unsigned char** tail_oeb, // 32 bytes
-    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
-    unsigned char** iv)
+    int* p_se_blocks_count,
+    unsigned char** p_tail_fk, // 32 bytes
+    unsigned char** p_tail_sk, // 32 bytes
+    unsigned char* tails_se[32], // enc_oeb_index_size bytes
+    unsigned char** p_tail_sgx,
+    unsigned char** p_iv)
 {
+
     *p_blocks_count = unpack32(inputStream);
     inputStream += 4;
-    *p_enc_oeb_index_size = unpack32(inputStream);
+    *p_se_blocks_count = unpack32(inputStream);
     inputStream += 4;
 
-    (*tail_fk) = (unsigned char*) malloc(32);
-    (*tail_oeb) = (unsigned char*) malloc(32);
-    (*iv) = (unsigned char*) malloc(32);
-    (*enc_oeb_index) = (unsigned char*) malloc(*p_enc_oeb_index_size);
+    (*p_tail_fk) = (unsigned char*) malloc(32);
+    (*p_tail_sk) = (unsigned char*) malloc(32);
+    (*p_tail_sgx) = (unsigned char*) malloc(256);
+    (*p_iv) = (unsigned char*) malloc(32);
 
-    memcpy(*tail_fk, inputStream, 32);
+    memcpy(*p_tail_fk, inputStream, 32);
     inputStream += 32;
 
-    memcpy(*tail_oeb, inputStream, 32);
+    memcpy(*p_tail_sk, inputStream, 32);
     inputStream += 32;
 
-    memcpy(*enc_oeb_index, inputStream, *p_enc_oeb_index_size);
-    inputStream += *p_enc_oeb_index_size;
+    for(int i=0; i<*p_se_blocks_count; i++)
+    {
+        tails_se[i] = (unsigned char*) malloc(32);
+        memcpy(tails_se[i], inputStream, 32);
+        inputStream += 32;
+    }
 
-    memcpy(*iv, inputStream, 32);
+    memcpy(*p_tail_sgx, inputStream, 32);
+    inputStream += 32;
+
+    memcpy(*p_iv, inputStream, 32);
     inputStream += 32;
 }
 
@@ -162,54 +171,27 @@ void serialize_metadata_to_file(
 void deserialize_metadata_file(
     char* file_name,
     int* p_blocks_count,
-    int* p_enc_oeb_index_size,
+    int* se_blocks_count,
     unsigned char** tail_fk, // 32 bytes
-    unsigned char** tail_oeb, // 32 bytes
-    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
+    unsigned char** tail_sk, // 32 bytes
+    unsigned char* tails_se[32], // enc_oeb_index_size bytes
+    unsigned char** tail_sgx,
     unsigned char** iv)
 {
-
-    /*
-    std::string full_key_name(file_name);
-    full_key_name = "tmp_storage/" + full_key_name;
-
-    std::ifstream s(full_key_name);
-    s.seekg(0, std::ifstream::end);
-    int file_size = s.tellg();
-    s.seekg(0);
-*/
-
-
     unsigned char* m;
     size_t file_size;
 
-//    clock_t begin = clock();
-
     RedisCloud::GetBinary(file_name, &m, &file_size);
-
-//    clock_t end = clock();
-//    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-
-
-
-//    printf("GET BINRARY (%f)\n", time_spent);
-
-    //unsigned char* m; // = (unsigned char*) malloc(file_size);
-//    s.read(reinterpret_cast<char*>(m), file_size);
-
-
-//    printf("DESERIALIZED META : %d\n", file_size);
-//    printf("META FROM REDIS : "); print_hex(m, file_size);
 
     deserialize_metadata_stream(
         m,
         file_size,
         p_blocks_count,
-        p_enc_oeb_index_size,
-        tail_fk, // 32 bytes
-        tail_oeb, // 32 bytes
-        enc_oeb_index, // enc_oeb_index_size bytes
+        se_blocks_count,
+        tail_fk,
+        tail_sk,
+        tails_se,
+        tail_sgx,
         iv);
 
-//    s.close();
 }

@@ -132,6 +132,7 @@ int functional_tests(int block_size_in_bytes, int se_count)
     std::stringstream buffer;
     buffer << t.rdbuf();
     std::string s = buffer.str();
+    t.close();
 
     std::string file_name = "file_" + std::to_string(block_size_in_bytes);
 
@@ -140,14 +141,11 @@ int functional_tests(int block_size_in_bytes, int se_count)
     write_file((char*)file_name.c_str(), s,
         old_gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
 
-    t.close();
+    std::string response;
+    read_file(file_name, response, old_gk, block_size_in_bytes);
 
-
-    //write_file("file.dat", old_gk, rsaPublicKey, strlen(rsaPublicKey), 256 * 1024);
-    //read_file("file.dat", old_gk, "temp.dat", 256 * 1024);
-
-    //re_key(old_gk, new_gk);
-    //read_file("file.dat", new_gk, "temp_rekeyed.dat");
+    // todo : verify that input file is similar to response
+    // ...
 }
 
 int storage_test()
