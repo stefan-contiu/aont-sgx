@@ -80,12 +80,11 @@ void deserialize_metadata_stream(
     }
 
     memcpy(*p_tail_sgx, inputStream, 32);
-    inputStream += 32;
+    inputStream += 256;
 
     memcpy(*p_iv, inputStream, 32);
     inputStream += 32;
 }
-
 
 void serialize_metadata_to_stream(
     unsigned char** meta_stream,
@@ -193,5 +192,4 @@ void deserialize_metadata_file(
         tails_se,
         tail_sgx,
         iv);
-
 }

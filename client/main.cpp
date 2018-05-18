@@ -144,8 +144,28 @@ int functional_tests(int block_size_in_bytes, int se_count)
     std::string response;
     read_file(file_name, response, old_gk, block_size_in_bytes);
 
-    // todo : verify that input file is similar to response
-    // ...
+    // check that same file size was returned
+    if (s.size() != response.size())
+    {
+        printf("TEST FAILED : write with %d bytes, read returned %d bytes.",
+            (int)s.size(), (int)response.size());
+        return -1;
+    }
+
+    // check that the same content was returned
+    unsigned char sha_write[32];
+    sgx_sha256((unsigned char*) s.c_str(), s.size(), sha_write);
+    unsigned char sha_read[32];
+    sgx_sha256((unsigned char*) response.c_str(), response.size(), sha_read);
+    if (memcmp((unsigned char*) s.c_str(), (unsigned char*) response.c_str(), 32) != 0)
+    {
+        printf("TEST FAILED : read returned a different content that written.");
+        print_hex(sha_write, 32);
+        print_hex(sha_read, 32);
+        return -1;
+    }
+
+    printf("TEST PASSED\n");
 }
 
 int storage_test()
