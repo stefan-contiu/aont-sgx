@@ -32,6 +32,7 @@
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk
+#SGX_MODE ?= HW
 SGX_MODE ?= HW
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 1
@@ -219,7 +220,7 @@ App/%.o: App/%.cpp
 	@echo "CXX  <=  $<"
 
 $(App_Name): App/Enclave_u.o $(App_Cpp_Objects) /home/stefan/code/hiredis/libhiredis.a
-	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L/home/stefan/code/hiredis/ -lsgx_usgxssl -o $@ $(App_Link_Flags) -lstdc++fs
+	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L/home/stefan/code/hiredis/ -lsgx_usgxssl -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core
 	@echo "LINK =>  $@"
 
 .config_$(Build_Mode)_$(SGX_ARCH):

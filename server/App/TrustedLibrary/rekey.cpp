@@ -1,42 +1,16 @@
-/*
- * Copyright (C) 2011-2017 Intel Corporation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-
 #include "../App.h"
 #include "Enclave_u.h"
 
 #include <vector>
 #include <string>
 
+#include <tgmath.h>
+
+#include <signal.h>
 #include <hiredis.h>
+#include <async.h>
+#include <adapters/libevent.h>
+
 
 #include <fstream>
 #include <experimental/filesystem>
@@ -61,6 +35,7 @@ class RedisCloud
     private:
         RedisCloud() {}
         static redisContext *c;
+        static redisAsyncContext *async_c;
 
     public:
         static void Init()
@@ -77,6 +52,47 @@ class RedisCloud
                 }
                 exit(1);
             }
+        }
+
+        static void InitAsync()
+        {
+            signal(SIGPIPE, SIG_IGN);
+            struct event_base *base = event_base_new();
+
+            async_c = redisAsyncConnect(LOCALHOST, 6379);
+            if (async_c->err) {
+                printf("error: %s\n", async_c->errstr);
+                return;
+            }
+
+            redisLibeventAttach(async_c, base);
+        }
+
+        static void pubCallback(redisAsyncContext *c, void *r, void *privdata) {
+          redisReply *reply = (redisReply*)r;
+          if (reply == NULL){
+              printf("Response not received.\n");
+            //cout<<"Response not recev"<<endl;
+            return;
+          }
+          printf("Message published.\n");
+          //cout<<"message published"<<endl;
+          //redisAsyncDisconnect(async_c);
+        }
+
+        static void Publish(std::string key, std::string& value)
+        {
+            struct event_base* base = event_base_new();
+
+            std::string cmd = "PUBLISH ";
+            cmd.append(key);
+            cmd.append(" ");
+            cmd.append(value);
+            redisAsyncCommand(async_c,
+                       pubCallback,
+                       (char*)"pub", cmd.c_str());
+
+            event_base_dispatch(base);
         }
 
         static void Bye()
@@ -115,9 +131,24 @@ class RedisCloud
             redisCommand(c,"flushall");
             redisCommand(c,"flushdb");
         }
+
+        static void FillMetadata(std::vector<std::string>& metadata)
+        {
+            metadata.clear();
+            redisReply *reply;
+            reply = (redisReply*) redisCommand(c,"KEYS *.metadata");
+            for(int i=0;i< reply->elements;i++)
+            {
+                //std::string* s = new std::string(reply->element[i]->str);
+                //printf("REDIS KEY : %s\n", s->c_str());
+                metadata.push_back(reply->element[i]->str);
+            }
+        }
 };
 
 redisContext* RedisCloud::c;
+redisAsyncContext *RedisCloud::async_c;
+
 
 void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
@@ -184,9 +215,6 @@ void ocall_put_block(char* key,
 
 void get_all_metadata_keys(std::vector<std::string>& metadata_keys)
 {
-    // todo: get keys in redis
-    return;
-
     metadata_keys.clear();
     for (auto & p : fs::directory_iterator(path))
         if (p.path().string().find(".metadata") != std::string::npos)
@@ -198,25 +226,106 @@ void get_all_metadata_keys(std::vector<std::string>& metadata_keys)
 }
 
 
+void onMessage(redisAsyncContext *c, void *reply, void *privdata) {
+    redisReply *r = (redisReply*) reply;
+    if (reply == NULL) return;
+
+    if (r->type == REDIS_REPLY_ARRAY) {
+        for (int j = 0; j < r->elements; j++) {
+            printf("%u) %s\n", j, r->element[j]->str);
+        }
+    }
+}
+
+void subCallback(redisAsyncContext *c, void *r, void *privdata) {
+
+  redisReply *reply = (redisReply*)r;
+  if (reply == NULL){
+    printf("Response not recev\n");
+    return;
+  }
+  if(reply->type == REDIS_REPLY_ARRAY & reply->elements == 3)
+  {
+    if(strcmp( reply->element[0]->str,"subscribe") != 0)
+    {
+      printf("Message received -> \n");//<<
+        //reply->element[2]->str<<"( on channel : "<<reply->element[1]->str<<")"<<endl;
+    }
+  }
+}
+
+/*
+[ ] Store Metadata Recipes in REDIS, blocks on HDD
+[ ] Master : first publishes an ALIVE_QUERY, subscribers (workers) return with their SGX_PUB_KEY.
+Master uses the list of respondents to perform a GroupSeal operation (hybrid encryption based).
+
+[ ] Do just single encryption, not super encryption: randomly chose K shielded blocks encrypted by GK, all the rest encrypted by FK.
+*/
+
+
+void query_alive_workers(std::vector<std::string>& workers_pub_keys)
+{
+    // publish a WORKER_ALIVE message?
+    workers_pub_keys.push_back("w0");
+    workers_pub_keys.push_back("w1");
+    workers_pub_keys.push_back("w2");
+}
+
 void listen_and_rekey(void)
 {
+    // master is always ON
+    // when workers are joining they publish a h(PK)
+    // master is always keeping a list of workers
 
-    printf("Get all keys ...\n");
-/*
-    std::vector<std::string> metadata {
-        "file_4096.metadata",
-        "file_262144.metadata",
-        "file_524288.metadata",
-        "file_1048576.metadata",
-        "file_2097152.metadata",
-        "file_4194304.metadata"};
-*/
-    std::vector<std::string> metadata { "file_1048576.metadata" };
+    // workers they listen to tasks over a hash of their public key
+    std::vector<std::string> workers;
+    query_alive_workers(workers);
 
+    // how many enclaves are up ? SGX_WORKER_0, SGX_WORKER_1, SGX_WORKER_2, ...
+    int N = workers.size(); //
+    printf("MASTER> workers available : %d\n", N);
+
+    // ecall : generate a new group key. GroupSeal: old_gk, new_gk.
+    unsigned char group_sealed_keys[64];
+
+    // get all the metadata files
+    std::vector<std::string> metadata_files;
     RedisCloud::Init();
+    RedisCloud::InitAsync();
+    RedisCloud::FillMetadata(metadata_files);
+    int M = metadata_files.size();
+    printf("MASTER> total files to re-key : %d\n", M);
 
-    //std::vector<std::string> metadata;
-    //get_all_metadata_keys(metadata);
+    // split M files into N batches
+    int batch_size = (int) ceil((double)M / N);
+    for(int i = 0; i < N; i++)
+    {
+        printf("MASTER> Broadcast to Worker %d : \n", i);
+        int batch_start = i * batch_size;
+        int batch_end   = (i + 1) * batch_size;
+        if (batch_end > M)
+        {
+            batch_end = M;
+        }
+
+        // start the message with the group selaed keys
+        std::string batch_files((char*)group_sealed_keys, 64);
+        for (int j = batch_start; j < batch_end; j++)
+        {
+            batch_files += metadata_files[j] + "\n";
+        }
+
+        RedisCloud::Publish(workers[i], batch_files);
+        //printf("%s\n", batch_files.c_str());
+    }
+
+    RedisCloud::Bye();
+
+//    while(true);
+
+/*
+    // TODO check for termination ?
+    return;
 
     for(int i=0; i<metadata.size(); i++)
     {
@@ -242,6 +351,5 @@ void listen_and_rekey(void)
         if (ret != SGX_SUCCESS)
             abort();
     }
-
-    RedisCloud::Bye();
+*/
 }
