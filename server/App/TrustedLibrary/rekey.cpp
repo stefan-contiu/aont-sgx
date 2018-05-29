@@ -271,7 +271,7 @@ void query_alive_workers(std::vector<std::string>& workers_pub_keys)
     workers_pub_keys.push_back("w2");
 }
 
-void listen_and_rekey(void)
+void master_loop(void)
 {
     // master is always ON
     // when workers are joining they publish a h(PK)
@@ -352,4 +352,19 @@ void listen_and_rekey(void)
             abort();
     }
 */
+}
+
+void worker_loop(char* worker_name)
+{
+    //
+    printf("WORKER %s> Started...\n", worker_name);
+
+    // subscribe to worker_name
+    // ...
+
+    // loop
+    while(true)
+    {
+
+    }
 }

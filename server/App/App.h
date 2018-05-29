@@ -58,7 +58,8 @@ extern sgx_enclave_id_t global_eid;    /* global enclave id */
 extern "C" {
 #endif
 
-void listen_and_rekey(void);
+void master_loop(void);
+void worker_loop(char* worker_name);
 
 #if defined(__cplusplus)
 }

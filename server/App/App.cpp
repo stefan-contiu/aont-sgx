@@ -242,9 +242,30 @@ int SGX_CDECL main(int argc, char *argv[])
         return -1;
     }
 
-    /* Utilize trusted libraries */
-    //ecall_libc_functions();
-    listen_and_rekey();
+    if (argc < 2)
+    {
+        printf("ERROR : please provide \"master\" or \"worker worker-name\" role.\n");
+        return -1;
+    }
+    else if (argc == 2)
+    {
+        if (strncmp(argv[1], "master", 6) != 0)
+        {
+            printf("ERROR : invalid role \"%s\".\n", argv[1]);
+            return -1;
+        }
+        master_loop();
+    }
+    else if (argc == 3)
+    {
+        if (strncmp(argv[1], "worker", 6) != 0)
+        {
+            printf("ERROR : invalid role \"%s\".\n", argv[1]);
+            return -1;
+        }
+        worker_loop(argv[2]);
+    }
+
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
