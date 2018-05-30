@@ -11,6 +11,9 @@
 #include <async.h>
 #include <adapters/libevent.h>
 
+#include <unistd.h>
+
+#include <set>
 
 #include <fstream>
 #include <experimental/filesystem>
@@ -29,6 +32,12 @@ static inline void print_hex(unsigned char *h, int l)
 
 #define LOCALHOST  "127.0.0.1"
 
+void worker_execute_job(char* workerName, char* params, size_t size);
+
+int WORKERS_ALIVE = 0;
+
+std::set<std::string> terminated;
+int FINAL_TERMINATION = 0;
 
 class RedisCloud
 {
@@ -36,6 +45,7 @@ class RedisCloud
         RedisCloud() {}
         static redisContext *c;
         static redisAsyncContext *async_c;
+        static struct event_base* base;
 
     public:
         static void Init()
@@ -54,20 +64,6 @@ class RedisCloud
             }
         }
 
-        static void InitAsync()
-        {
-            signal(SIGPIPE, SIG_IGN);
-            struct event_base *base = event_base_new();
-
-            async_c = redisAsyncConnect(LOCALHOST, 6379);
-            if (async_c->err) {
-                printf("error: %s\n", async_c->errstr);
-                return;
-            }
-
-            redisLibeventAttach(async_c, base);
-        }
-
         static void pubCallback(redisAsyncContext *c, void *r, void *privdata) {
           redisReply *reply = (redisReply*)r;
           if (reply == NULL){
@@ -77,21 +73,86 @@ class RedisCloud
           }
           printf("Message published.\n");
           //cout<<"message published"<<endl;
-          //redisAsyncDisconnect(async_c);
+          redisAsyncDisconnect(async_c);
         }
 
         static void Publish(std::string key, std::string& value)
         {
+            signal(SIGPIPE, SIG_IGN);
             struct event_base* base = event_base_new();
+            async_c = redisAsyncConnect(LOCALHOST, 6379);
+            if (async_c->err) {
+                printf("error: %s\n", async_c->errstr);
+                return;
+            }
+            redisLibeventAttach(async_c, base);
 
             std::string cmd = "PUBLISH ";
             cmd.append(key);
             cmd.append(" ");
             cmd.append(value);
+
+            printf("value : %s\n", value.c_str());
+            printf("to redis : %s\n", cmd.c_str());
             redisAsyncCommand(async_c,
                        pubCallback,
                        (char*)"pub", cmd.c_str());
 
+            event_base_dispatch(base);
+        }
+
+
+        static void _subCallback(redisAsyncContext *c, void *reply, void *privdata)
+        {
+            redisReply *r = (redisReply*) reply;
+            if (reply == NULL) return;
+
+            if (r->type == REDIS_REPLY_ARRAY) {
+
+                if (r->element[2]->str != NULL)
+                {
+
+                    if (strncmp(r->element[1]->str, "termination", 11) == 0)
+                    {
+                        // master handles termination ACK from workers
+                        if (strlen(r->element[2]->str) > 0)
+                        {
+                            //printf("SUB MESSAGE %s : %s !!!\n", r->element[1]->str, r->element[2]->str);
+                            terminated.insert(r->element[2]->str);
+                            if (terminated.size() == WORKERS_ALIVE)
+                            {
+                                redisAsyncDisconnect(async_c);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // workers handle job request from master
+                        // TODO : fix size the last param
+                        worker_execute_job(r->element[1]->str, r->element[2]->str, 0);
+                    }
+                }
+            }
+
+            //redisAsyncDisconnect(async_c);
+        }
+
+        static void Subscribe(std::string key)
+        {
+            signal(SIGPIPE, SIG_IGN);
+            struct event_base* base = event_base_new();
+
+            async_c = redisAsyncConnect(LOCALHOST, 6379);
+            if (async_c->err) {
+                printf("error: %s\n", async_c->errstr);
+                return;
+            }
+            redisLibeventAttach(async_c, base);
+
+            std::string cmd = "SUBSCRIBE ";
+            cmd.append(key);
+
+            redisAsyncCommand(async_c, _subCallback, (char*)"sub", cmd.c_str());
             event_base_dispatch(base);
         }
 
@@ -148,7 +209,7 @@ class RedisCloud
 
 redisContext* RedisCloud::c;
 redisAsyncContext *RedisCloud::async_c;
-
+struct event_base* RedisCloud::base;
 
 void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
@@ -273,6 +334,11 @@ void query_alive_workers(std::vector<std::string>& workers_pub_keys)
 
 void master_loop(void)
 {
+    struct timeval diff, startTV, endTV;
+    gettimeofday(&startTV, NULL);
+
+    RedisCloud::Init();
+
     // master is always ON
     // when workers are joining they publish a h(PK)
     // master is always keeping a list of workers
@@ -282,23 +348,22 @@ void master_loop(void)
     query_alive_workers(workers);
 
     // how many enclaves are up ? SGX_WORKER_0, SGX_WORKER_1, SGX_WORKER_2, ...
-    int N = workers.size(); //
-    printf("MASTER> workers available : %d\n", N);
+    WORKERS_ALIVE = workers.size(); //
+    printf("MASTER> workers available : %d\n", WORKERS_ALIVE);
 
     // ecall : generate a new group key. GroupSeal: old_gk, new_gk.
     unsigned char group_sealed_keys[64];
 
     // get all the metadata files
     std::vector<std::string> metadata_files;
-    RedisCloud::Init();
-    RedisCloud::InitAsync();
+    //RedisCloud::InitAsync();
     RedisCloud::FillMetadata(metadata_files);
     int M = metadata_files.size();
     printf("MASTER> total files to re-key : %d\n", M);
 
     // split M files into N batches
-    int batch_size = (int) ceil((double)M / N);
-    for(int i = 0; i < N; i++)
+    int batch_size = (int) ceil((double)M / WORKERS_ALIVE);
+    for(int i = 0; i < WORKERS_ALIVE; i++)
     {
         printf("MASTER> Broadcast to Worker %d : \n", i);
         int batch_start = i * batch_size;
@@ -309,19 +374,29 @@ void master_loop(void)
         }
 
         // start the message with the group selaed keys
-        std::string batch_files((char*)group_sealed_keys, 64);
+        std::string batch_files = "";
         for (int j = batch_start; j < batch_end; j++)
         {
-            batch_files += metadata_files[j] + "\n";
+            batch_files += metadata_files[j] + ";";
+            //printf("%s\n", metadata_files[j].c_str());
         }
 
         RedisCloud::Publish(workers[i], batch_files);
-        //printf("%s\n", batch_files.c_str());
+        printf("Pub done\n");
     }
+
+    // master subscribes and listens to termination of all workers
+    RedisCloud::Subscribe("termination");
 
     RedisCloud::Bye();
 
-//    while(true);
+    printf("MASTER> All Workers Terminated!\n");
+
+    gettimeofday(&endTV, NULL);
+    timersub(&endTV, &startTV, &diff);
+    printf("*** time taken = %ld.%ld (s)\n", diff.tv_sec, diff.tv_usec);
+
+
 
 /*
     // TODO check for termination ?
@@ -354,17 +429,28 @@ void master_loop(void)
 */
 }
 
+void worker_execute_job(char* worker_name, char* params, size_t size)
+{
+    printf("WORKER %s> Do work...\n", worker_name);
+
+    // de-serialize parameters - mock the two encryption keys
+    unsigned char group_sealed_keys[64];
+
+    // go to SGX enclave and do batch processing
+    usleep(5000 * 1000);
+
+    // signal to master that work is done
+    std::string worker_done_key = "termination";
+    std::string worker_done_value = worker_name;
+    RedisCloud::Publish(worker_done_key, worker_done_value);
+}
+
 void worker_loop(char* worker_name)
 {
     //
     printf("WORKER %s> Started...\n", worker_name);
 
     // subscribe to worker_name
-    // ...
-
-    // loop
-    while(true)
-    {
-
-    }
+    RedisCloud::Init();
+    RedisCloud::Subscribe(worker_name);
 }
