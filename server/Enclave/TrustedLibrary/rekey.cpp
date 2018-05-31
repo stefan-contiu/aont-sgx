@@ -321,55 +321,116 @@ unsigned char* sgx_sha256(const unsigned char *d,
 TEST CODE FOR SRDS2018
 ******************************************************************************/
 
-char* sgx_provisioned_key = "1234567890123456";
+// assume that there exist a 128 bits symmetric key priorly provisioned to the enclaves
+char* sgx_provisioned_key = (char*)"1234567890123456";
 
-void set_ctr(uint32_t val, uint8_t *ctr, size_t ctr_size)
+void set_ctr_bytes(uint32_t val, uint8_t *ctr, size_t ctr_size)
 {
-    // We'll never go beyond 2^32 for counter values. Remember that counter applies
-    // for blocks of 16 bytes (128 bits).
-    ctr[ctr_size - 4] = (val & 0xff000000) >> 24;
-    ctr[ctr_size - 3] = (val & 0x00ff0000) >> 16;
-    ctr[ctr_size - 2] = (val & 0x0000ff00) >>  8;
-    ctr[ctr_size - 1] = (val & 0x000000ff);
+	// within our simulation counters do not exceed 2^32 values, meaning that they can
+	// be represented on 4 bytes.
+	ctr[ctr_size - 4] = (val & 0xff000000) >> 24;
+	ctr[ctr_size - 3] = (val & 0x00ff0000) >> 16;
+	ctr[ctr_size - 2] = (val & 0x0000ff00) >>  8;
+	ctr[ctr_size - 1] = (val & 0x000000ff);
 }
 
-sgx_status_t encrypt_ctr(
-    char* in, size_t in_size,
-    char* out)
+sgx_status_t decryptMessage(char* in, size_t in_size, char* out, uint32_t counter)
 {
-    uint8_t ctr[16] = {0};
-    return sgx_aes_ctr_encrypt(
-        (sgx_aes_ctr_128bit_key_t*) sgx_provisioned_key,
-        (uint8_t*) in, in_size, ctr, 128,
-        (uint8_t*) out);
+	uint8_t ctr_bytes[16] = {0};
+	set_ctr_bytes(counter, ctr_bytes, 16);
+	return sgx_aes_ctr_decrypt((sgx_aes_ctr_128bit_key_t*) sgx_provisioned_key,
+		(uint8_t*) in, in_size, ctr_bytes, 128,
+		(uint8_t*) out);
 }
 
-sgx_status_t decrypt_ctr(
-    char* in, size_t in_size,
-    size_t counter,
-    char* out)
+sgx_status_t encryptMessage(char* in, size_t in_size, char* out, uint32_t counter)
 {
-    uint8_t ctr[16] = {0};
-    set_ctr(counter, (unsigned char*) ctr, 16);
-    return sgx_aes_ctr_decrypt((sgx_aes_ctr_128bit_key_t*) sgx_provisioned_key,
-        (uint8_t*) in, in_size, ctr, 128,
-        (uint8_t*) out);
+	uint8_t ctr_bytes[16] = {0};
+	set_ctr_bytes(counter, ctr_bytes, 16);
+	return sgx_aes_ctr_encrypt(
+		(sgx_aes_ctr_128bit_key_t*) sgx_provisioned_key,
+		(uint8_t*) in, in_size, ctr_bytes, 128,
+		(uint8_t*) out);
 }
 
-void proxy_send()
+void send_by_socket(unsigned char* data, size_t size)
 {
-
+    // ...
 }
 
-void proxy_recv()
+void test_encrypt()
 {
+    // simulate a large video segment
+    int segment_size = 1000;
+    unsigned char segment[segment_size];
+    sgx_read_rand(segment, segment_size);
 
+    unsigned char* previous_subpacket_tail;
+    int previous_subpacket_tail_size = 0;
+
+    // split the segment in arbitrary size sub-packets
+    int segment_offset = 0;
+    int counter_16bytes = 0;
+    while(segment_offset < segment_size)
+    {
+        // --- simulate the recv of random size sub-packet
+        unsigned char sub_packet_size;
+        sgx_read_rand(&sub_packet_size, 1);
+        // make sure we don't overflow the segment size
+        if (segment_offset + sub_packet_size > segment_size)
+        {
+            sub_packet_size = segment_size - segment_offset;
+        }
+        // see here that we allocate space for the subpacket and the tail of the previous sub-packet
+        unsigned char* sub_packet = (unsigned char*) malloc(previous_subpacket_tail_size + sub_packet_size);
+        printf("Received sub-packet size : %d\n", (int) sub_packet_size);
+        memcpy(sub_packet + previous_subpacket_tail_size, segment + segment_offset, sub_packet_size);
+
+        // pre-pend to the sub-packet the tail of previous sub-packet
+        memcpy(sub_packet, previous_subpacket_tail, previous_subpacket_tail_size);
+        sub_packet_size += previous_subpacket_tail_size;
+        printf("  * prepended previous tail. new sub-packet size : %d\n", (int) sub_packet_size);
+
+        // trim the tail of sub-packet (e.g. tail = whatever overflows from the last multiple of 16)
+        int valid_packet_size = 16 * (sub_packet_size / 16);
+        printf("  * packet is trimmed to multiple of 16. new size : %d\n", (int) valid_packet_size);
+
+        // encrypt and send data
+        unsigned char out[valid_packet_size];
+        encryptMessage((char*) sub_packet, valid_packet_size, (char*) out, counter_16bytes);
+        send_by_socket(out, valid_packet_size);
+
+        // increment counter
+        counter_16bytes += valid_packet_size / 16;
+        printf("  * aes-ctr counter incremented to value : %d\n", counter_16bytes);
+
+        // retain tail for the next iteration
+        previous_subpacket_tail_size = sub_packet_size - valid_packet_size;
+        previous_subpacket_tail = (unsigned char*) malloc(previous_subpacket_tail_size);
+        memcpy(previous_subpacket_tail, sub_packet + valid_packet_size, previous_subpacket_tail_size);
+        printf("  * the new tail has size : %d\n", previous_subpacket_tail_size);
+
+        // move the offset in the video segment
+        segment_offset += sub_packet_size;
+    }
+
+    // if there is any tail leftover :
+    if (previous_subpacket_tail_size > 0)
+    {
+        unsigned char out[previous_subpacket_tail_size];
+        encryptMessage((char*) previous_subpacket_tail, previous_subpacket_tail_size,
+            (char*) out, counter_16bytes);
+        send_by_socket(out, previous_subpacket_tail_size);
+    }
 }
+
 
 void test_srds()
 {
     printf("--- TEST SRDS Encryption \n");
-
+    test_encrypt();
+    return;
+/*
     char* p = "Of recommend residence education be on difficult repulsive offending. Judge views had mirth table seems great him for her. Alone all happy asked begin fully stand own get. Excuse ye seeing result of we. See scale dried songs old may not. Promotion did disposing you household any instantly. Hills we do under times at first short an.";
     int p_size = strlen(p);
     char* c = (char*) malloc(p_size);
@@ -404,7 +465,7 @@ void test_srds()
         offset += chunk_size;
 
         {
-            // print message 
+            // print message
             if (offset > p_size)
             {
                 chunk[p_size % chunk_size] = 0;
@@ -422,11 +483,30 @@ void test_srds()
     // clean-up
     free(c);
     free(d);
+    */
 }
 
 
 /*****************************************************************************
 ******************************************************************************/
+
+void worker_loop()
+{
+    while(true)
+    {
+        //
+    }
+}
+
+void slave_re_key(char* buff)
+{
+    // deserialize slave request
+    unsigned char old_gk[32];
+    unsigned char new_gk[32];
+    unsigned char iv[32];
+
+    // split the input buffer in
+}
 
 void ecall_worker_re_key(
     char* key,
