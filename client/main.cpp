@@ -236,7 +236,7 @@ int main()
 
     std::vector<int> test_distribution({2, 6, 2, 1});
     write_files_according_to_distribution(
-        20, test_distribution, // write 20 files
+        10, test_distribution, // write 20 files
         4, 32,  // with sizes between 4 and 32 MB
         512 * 1024, // with block sizes of 512 KB
         3 // and with 3 se blocks/file

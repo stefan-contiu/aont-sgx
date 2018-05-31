@@ -41,6 +41,9 @@
 #include "sgx_error.h"       /* sgx_status_t */
 #include "sgx_eid.h"     /* sgx_enclave_id_t */
 
+#include <vector>
+#include <string>
+
 #ifndef TRUE
 # define TRUE 1
 #endif
@@ -58,7 +61,7 @@ extern sgx_enclave_id_t global_eid;    /* global enclave id */
 extern "C" {
 #endif
 
-void master_loop(void);
+void master_loop(std::vector<std::string> workers);
 void worker_loop(char* worker_name);
 
 #if defined(__cplusplus)

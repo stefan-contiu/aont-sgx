@@ -1,35 +1,3 @@
-/*
- * Copyright (C) 2011-2017 Intel Corporation. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   * Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   * Neither the name of Intel Corporation nor the names of its
- *     contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- */
-
-
 #include <string.h>
 #include "sgx_cpuid.h"
 
@@ -61,8 +29,8 @@ void ecall_malloc_free(void)
     free(ptr);
 }
 
-unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
-unsigned char* new_gk = (unsigned char*) "00001111222233334444455556789012";
+//unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
+//unsigned char* new_gk = (unsigned char*) "00001111222233334444455556789012";
 
 void pack32(uint32_t val,uint8_t *dest)
 {
@@ -152,19 +120,25 @@ void deserialize_metadata_stream(
     inputStream += 32;
 }
 
-
 void serialize_metadata_to_stream(
     unsigned char** meta_stream,
-    int* p_meta_stream_size,
+    size_t* p_meta_stream_size,
     int blocks_count,
-    int enc_oeb_index_size,
+    int se_blocks_count,
     unsigned char* tail_fk, // 32 bytes
-    unsigned char* tail_oeb, // 32 bytes
-    unsigned char* enc_oeb_index, // enc_oeb_index_size bytes
-    unsigned char* iv
-)
+    unsigned char* tail_sk, // 32 bytes
+    unsigned char* tails_se[32],
+    unsigned char* tail_sgx, //256 bytes
+    unsigned char* iv)
 {
-    int stream_size = 4 + 4 + 32 + 32 + 32 + enc_oeb_index_size;
+    int stream_size =
+        4       // blocks_count
+        + 4     // se_blocks_count
+        + 32    // tail_fk
+        + 32    // tail_sk
+        + 32 * se_blocks_count // tails_se
+        + 256   // tail_sgx
+        + 32;   // iv
     *meta_stream = (unsigned char*) malloc(stream_size);
     int stream_index = 0;
 
@@ -173,17 +147,28 @@ void serialize_metadata_to_stream(
     memcpy(*meta_stream + stream_index, bc, 4);
     stream_index += 4;
 
-    unsigned char bi[4];
-    pack32(enc_oeb_index_size, bi);
-    memcpy(*meta_stream + stream_index, bi, 4);
+    unsigned char sbc[4];
+    pack32(se_blocks_count, sbc);
+    memcpy(*meta_stream + stream_index, sbc, 4);
     stream_index += 4;
 
     memcpy(*meta_stream + stream_index, tail_fk, 32);
     stream_index += 32;
-    memcpy(*meta_stream + stream_index, tail_oeb, 32);
+
+    memcpy(*meta_stream + stream_index, tail_sk, 32);
     stream_index += 32;
-    memcpy(*meta_stream + stream_index, enc_oeb_index, enc_oeb_index_size);
-    stream_index += enc_oeb_index_size;
+
+    for(int i=0; i<se_blocks_count; i++)
+    {
+        memcpy(*meta_stream + stream_index, tails_se[i], 32);
+        stream_index += 32;
+    }
+
+    memcpy(*meta_stream + stream_index, tail_sgx, 256);
+    //printf("SSGX : "); print_hex(tail_sgx, 64);
+    //printf("stre : "); print_hex(*meta_stream + stream_index, 64);
+    stream_index += 256;
+
     memcpy(*meta_stream + stream_index, iv, 32);
     stream_index += 32;
 
@@ -332,8 +317,10 @@ unsigned char* sgx_sha256(const unsigned char *d,
 void file_re_key(char* meta_name)
 {
     // deserialize slave request
-    unsigned char old_gk[32];
-    unsigned char new_gk[32];
+
+    // mock the sealed group keys
+    unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
+    unsigned char* new_gk = (unsigned char*) "xxx45678901234567890123456789012";
 
     // split the input buffer in
     printf("---- Working on metadata: %s\n", meta_name);
@@ -379,27 +366,76 @@ void file_re_key(char* meta_name)
         se_blocks.push_back((int) se_index);
     }
 
+    // decrypt the enc_tail_fk, enc_tail_sk
+    unsigned char* tail_fk = (unsigned char*) malloc(32);
+    unsigned char* tail_sk = (unsigned char*) malloc(32);
+    sgx_aes_decrypt(enc_tail_fk, 32, old_gk, iv, tail_fk);
+    sgx_aes_decrypt(enc_tail_sk, 32, old_gk, iv, tail_sk);
+
     // ocall : bring the blocks from the storage
     for(int i=0; i<number_of_super_encrypted_blocks; i++)
     {
-        // get the block
-        // TODO : ocall_get_block();
+        std::string blockName = std::string(meta_name);
+        // strip .metadata suffix and add block index
+        blockName.replace(blockName.size() - 9, 9, "");
+        blockName = blockName + "." + std::to_string(se_blocks[i]);
 
-        // get its hash
-        // ...
+        // get the block
+        int block_size = 0;
+        // TODO : enc_block SIZE should come as a parameter
+        unsigned char* enc_block = (unsigned char*) malloc(1024 * 512);
+        ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
+        printf("Loaded %s of size %d\n", blockName.c_str(), block_size);
+
+        // get its hash, xor it out of tail_sk
+        {
+            unsigned char* enc_block_sha = (unsigned char*) malloc(32);
+            sgx_sha256(enc_block, block_size, enc_block_sha);
+            xor_into_array(tail_sk, enc_block_sha, 32);
+        }
 
         // re-key the block
-        // ...
+        unsigned char dec_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+        unsigned char enc_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
 
-        // get its hash
-        // ...
+        // get its hash, xor it into tail_sk
+        {
+            unsigned char* enc_enc_block_sha = (unsigned char*) malloc(32);
+            sgx_sha256(enc_enc_block, block_size, enc_enc_block_sha);
+            xor_into_array(tail_sk, enc_enc_block_sha, 32);
+        }
 
-        // push back
-        // ...
+        // push back block
+        ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
     }
 
-    // alter the metadata, push metadata to redis
-    // ...
+    // encrypt the metadata by the new group key
+    unsigned char new_enc_tail_fk[32];// = (unsigned char*) malloc(32);
+    unsigned char new_enc_tail_sk[32];// = (unsigned char*) malloc(32);
+    sgx_aes_encrypt(tail_fk, 32, new_gk, iv, new_enc_tail_fk);
+    sgx_aes_encrypt(tail_sk, 32, new_gk, iv, new_enc_tail_sk);
+
+    // serialize new metadata
+    unsigned char* new_metadata;
+    size_t new_metadata_size;
+    serialize_metadata_to_stream(
+        &new_metadata,
+        &new_metadata_size,
+        number_of_blocks,
+        number_of_super_encrypted_blocks,
+        new_enc_tail_fk, // 32 bytes
+        new_enc_tail_sk, // 32 bytes
+        tails_se,
+        tail_sgx, //256 bytes
+        iv);
+
+    // push metadata to redis
+    ocall_put_metadata(meta_name, new_metadata, new_metadata_size);
+
+    // clean-up
+    // TODO : ...
 }
 
 void ecall_worker_re_key(char* job_params, size_t job_params_size)

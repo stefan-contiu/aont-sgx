@@ -244,26 +244,26 @@ int SGX_CDECL main(int argc, char *argv[])
 
     if (argc < 2)
     {
-        printf("ERROR : please provide \"master\" or \"worker worker-name\" role.\n");
+        printf("ERROR : please provide \"master woker1-name worker2-name ...\" or \"worker worker-name\" role.\n");
         return -1;
     }
-    else if (argc == 2)
+    else
     {
-        if (strncmp(argv[1], "master", 6) != 0)
+        if (strncmp(argv[1], "master", 6) == 0)
         {
-            printf("ERROR : invalid role \"%s\".\n", argv[1]);
-            return -1;
+            // parse the workers, pass them to the master
+            std::vector<std::string> workers;
+            for(int i=2; i<argc; i++)
+            {
+                std::string s(argv[i]);
+                workers.push_back(s);
+            }
+            master_loop(workers);
         }
-        master_loop();
-    }
-    else if (argc == 3)
-    {
-        if (strncmp(argv[1], "worker", 6) != 0)
+        else if (strncmp(argv[1], "worker", 6) != 0)
         {
-            printf("ERROR : invalid role \"%s\".\n", argv[1]);
-            return -1;
+            worker_loop(argv[2]);
         }
-        worker_loop(argv[2]);
     }
 
 

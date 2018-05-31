@@ -19,8 +19,7 @@
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem::v1;
 
-static std::string path = "/home/stefan/code/aont/client/tmp_storage/";
-
+static std::string path = "/media/stefan/Windows/PHD/aont/";
 
 static inline void print_hex(unsigned char *h, int l)
 {
@@ -222,11 +221,14 @@ void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
     std::ifstream s(full_key_name);
     s.seekg(0, std::ifstream::end);
     int file_size = s.tellg();
+    //printf("FILE %s SIZE = %d\n", full_key_name.c_str(), file_size);
+
     s.seekg(0);
+
+    // TODO : check caller and make sure we don't double allocate
     (*value) = (unsigned char*) malloc(file_size);
     s.read(reinterpret_cast<char*>(*value), file_size);
     (*p_size) = file_size;
-    printf("FILE SIZE = %d\n", file_size);
     s.close();
 }
 
@@ -255,7 +257,7 @@ int ocall_get_block(char* key, unsigned char **content, int s)
 
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("OCALL READ %f\n", time_spent);
+    //printf("OCALL READ %f\n", time_spent);
 
     return content_size;
 }
@@ -270,7 +272,7 @@ void ocall_put_block(char* key,
 
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("%d OCALL WRITE %f\n", content_size, time_spent);
+//    printf("%d OCALL WRITE %f\n", content_size, time_spent);
 }
 
 int ocall_get_metadata(char* key, unsigned char **content, int s)
@@ -338,16 +340,7 @@ Master uses the list of respondents to perform a GroupSeal operation (hybrid enc
 [ ] Do just single encryption, not super encryption: randomly chose K shielded blocks encrypted by GK, all the rest encrypted by FK.
 */
 
-
-void query_alive_workers(std::vector<std::string>& workers_pub_keys)
-{
-    // publish a WORKER_ALIVE message?
-    workers_pub_keys.push_back("w0");
-    workers_pub_keys.push_back("w1");
-    workers_pub_keys.push_back("w2");
-}
-
-void master_loop(void)
+void master_loop(std::vector<std::string> workers)
 {
     struct timeval diff, startTV, endTV;
     gettimeofday(&startTV, NULL);
@@ -357,10 +350,6 @@ void master_loop(void)
     // master is always ON
     // when workers are joining they publish a h(PK)
     // master is always keeping a list of workers
-
-    // workers they listen to tasks over a hash of their public key
-    std::vector<std::string> workers;
-    query_alive_workers(workers);
 
     // how many enclaves are up ? SGX_WORKER_0, SGX_WORKER_1, SGX_WORKER_2, ...
     WORKERS_ALIVE = workers.size(); //
