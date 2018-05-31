@@ -227,11 +227,11 @@ int main()
 
     //benchmark_aes();
     //benchmark_write();
-    if (functional_tests(64 * 1024, 3) != 0)
-    {
-        printf("Execution stopped. Functional tests failed.\n");
-        return -1;
-    }
+//    if (functional_tests(64 * 1024, 3) != 0)
+//    {
+//        printf("Execution stopped. Functional tests failed.\n");
+//        return -1;
+//    }
     RedisCloud::FlushAll();
 
     std::vector<int> test_distribution({2, 6, 2, 1});

@@ -53,10 +53,8 @@ enclave {
         public void ecall_sgx_cpuid([out] int cpuinfo[4], int leaf);
 
         public void ecall_worker_re_key(
-            [in, size=key_size] char* key,
-            size_t key_size,
-            [in, size=meta_size] char* metadata,
-            size_t meta_size);
+            [in, size=job_params_size] char* job_params,
+            size_t job_params_size);
     };
 
     untrusted {
@@ -64,6 +62,12 @@ enclave {
             [out] unsigned char **content, int s);
 
         void ocall_put_block([in, string] char* key,
+            [user_check] unsigned char* content, int content_size);
+
+        int ocall_get_metadata([in, string] char* key,
+            [out] unsigned char **content, int s);
+
+        void ocall_put_metadata([in, string] char* key,
             [user_check] unsigned char* content, int content_size);
     };
 };

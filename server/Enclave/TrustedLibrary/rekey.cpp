@@ -45,6 +45,7 @@
 #include <openssl/sha.h>
 #include <openssl/evp.h>
 
+#include <vector>
 #include <string>
 
 #include "sgx_tcrypto.h"
@@ -113,32 +114,41 @@ void deserialize_metadata_stream(
     unsigned char* inputStream,
     int inputStreamSize,
     int* p_blocks_count,
-    int* p_enc_oeb_index_size,
-    unsigned char** tail_fk, // 32 bytes
-    unsigned char** tail_oeb, // 32 bytes
-    unsigned char** enc_oeb_index, // enc_oeb_index_size bytes
-    unsigned char** iv)
+    int* p_se_blocks_count,
+    unsigned char** p_tail_fk, // 32 bytes
+    unsigned char** p_tail_sk, // 32 bytes
+    unsigned char* tails_se[32], // enc_oeb_index_size bytes
+    unsigned char** p_tail_sgx,
+    unsigned char** p_iv)
 {
+
     *p_blocks_count = unpack32(inputStream);
     inputStream += 4;
-    *p_enc_oeb_index_size = unpack32(inputStream);
+    *p_se_blocks_count = unpack32(inputStream);
     inputStream += 4;
 
-    (*tail_fk) = (unsigned char*) malloc(32);
-    (*tail_oeb) = (unsigned char*) malloc(32);
-    (*enc_oeb_index) = (unsigned char*) malloc(*p_enc_oeb_index_size);
-    (*iv) = (unsigned char*) malloc(32);
+    (*p_tail_fk) = (unsigned char*) malloc(32);
+    (*p_tail_sk) = (unsigned char*) malloc(32);
+    (*p_tail_sgx) = (unsigned char*) malloc(256);
+    (*p_iv) = (unsigned char*) malloc(32);
 
-    memcpy(*tail_fk, inputStream, 32);
+    memcpy(*p_tail_fk, inputStream, 32);
     inputStream += 32;
 
-    memcpy(*tail_oeb, inputStream, 32);
+    memcpy(*p_tail_sk, inputStream, 32);
     inputStream += 32;
 
-    memcpy(*enc_oeb_index, inputStream, *p_enc_oeb_index_size);
-    inputStream += *p_enc_oeb_index_size;
+    for(int i=0; i<*p_se_blocks_count; i++)
+    {
+        tails_se[i] = (unsigned char*) malloc(32);
+        memcpy(tails_se[i], inputStream, 32);
+        inputStream += 32;
+    }
 
-    memcpy(*iv, inputStream, 32);
+    memcpy(*p_tail_sgx, inputStream, 256);
+    inputStream += 256;
+
+    memcpy(*p_iv, inputStream, 32);
     inputStream += 32;
 }
 
@@ -182,6 +192,7 @@ void serialize_metadata_to_stream(
 
 void test_serialization()
 {
+    /*
     // serialize
     unsigned char* tail_fk = (unsigned char*) "12345678901234567890123456789012";
     unsigned char* tail_oeb = (unsigned char*) "XXX45678901234567890123456789YYY";
@@ -209,6 +220,7 @@ void test_serialization()
     printf("OBE B size   : %d vs %d\n", o_b2, b2);
     //print_hex(tail_fk, 32);
     //print_hex(d_tail_fk, 32);
+    */
 }
 
 static char rsaPrivateKey[]="-----BEGIN RSA PRIVATE KEY-----\n"\
@@ -317,208 +329,93 @@ unsigned char* sgx_sha256(const unsigned char *d,
     return SHA256(d, n, md);
 }
 
-/*****************************************************************************
-TEST CODE FOR SRDS2018
-******************************************************************************/
-
-// assume that there exist a 128 bits symmetric key priorly provisioned to the enclaves
-char* sgx_provisioned_key = (char*)"1234567890123456";
-
-void set_ctr_bytes(uint32_t val, uint8_t *ctr, size_t ctr_size)
-{
-	// within our simulation counters do not exceed 2^32 values, meaning that they can
-	// be represented on 4 bytes.
-	ctr[ctr_size - 4] = (val & 0xff000000) >> 24;
-	ctr[ctr_size - 3] = (val & 0x00ff0000) >> 16;
-	ctr[ctr_size - 2] = (val & 0x0000ff00) >>  8;
-	ctr[ctr_size - 1] = (val & 0x000000ff);
-}
-
-sgx_status_t decryptMessage(char* in, size_t in_size, char* out, uint32_t counter)
-{
-	uint8_t ctr_bytes[16] = {0};
-	set_ctr_bytes(counter, ctr_bytes, 16);
-	return sgx_aes_ctr_decrypt((sgx_aes_ctr_128bit_key_t*) sgx_provisioned_key,
-		(uint8_t*) in, in_size, ctr_bytes, 128,
-		(uint8_t*) out);
-}
-
-sgx_status_t encryptMessage(char* in, size_t in_size, char* out, uint32_t counter)
-{
-	uint8_t ctr_bytes[16] = {0};
-	set_ctr_bytes(counter, ctr_bytes, 16);
-	return sgx_aes_ctr_encrypt(
-		(sgx_aes_ctr_128bit_key_t*) sgx_provisioned_key,
-		(uint8_t*) in, in_size, ctr_bytes, 128,
-		(uint8_t*) out);
-}
-
-void send_by_socket(unsigned char* data, size_t size)
-{
-    // ...
-}
-
-void test_encrypt()
-{
-    // simulate a large video segment
-    int segment_size = 1000;
-    unsigned char segment[segment_size];
-    sgx_read_rand(segment, segment_size);
-
-    unsigned char* previous_subpacket_tail;
-    int previous_subpacket_tail_size = 0;
-
-    // split the segment in arbitrary size sub-packets
-    int segment_offset = 0;
-    int counter_16bytes = 0;
-    while(segment_offset < segment_size)
-    {
-        // --- simulate the recv of random size sub-packet
-        unsigned char sub_packet_size;
-        sgx_read_rand(&sub_packet_size, 1);
-        // make sure we don't overflow the segment size
-        if (segment_offset + sub_packet_size > segment_size)
-        {
-            sub_packet_size = segment_size - segment_offset;
-        }
-        // see here that we allocate space for the subpacket and the tail of the previous sub-packet
-        unsigned char* sub_packet = (unsigned char*) malloc(previous_subpacket_tail_size + sub_packet_size);
-        printf("Received sub-packet size : %d\n", (int) sub_packet_size);
-        memcpy(sub_packet + previous_subpacket_tail_size, segment + segment_offset, sub_packet_size);
-
-        // pre-pend to the sub-packet the tail of previous sub-packet
-        memcpy(sub_packet, previous_subpacket_tail, previous_subpacket_tail_size);
-        sub_packet_size += previous_subpacket_tail_size;
-        printf("  * prepended previous tail. new sub-packet size : %d\n", (int) sub_packet_size);
-
-        // trim the tail of sub-packet (e.g. tail = whatever overflows from the last multiple of 16)
-        int valid_packet_size = 16 * (sub_packet_size / 16);
-        printf("  * packet is trimmed to multiple of 16. new size : %d\n", (int) valid_packet_size);
-
-        // encrypt and send data
-        unsigned char out[valid_packet_size];
-        encryptMessage((char*) sub_packet, valid_packet_size, (char*) out, counter_16bytes);
-        send_by_socket(out, valid_packet_size);
-
-        // increment counter
-        counter_16bytes += valid_packet_size / 16;
-        printf("  * aes-ctr counter incremented to value : %d\n", counter_16bytes);
-
-        // retain tail for the next iteration
-        previous_subpacket_tail_size = sub_packet_size - valid_packet_size;
-        previous_subpacket_tail = (unsigned char*) malloc(previous_subpacket_tail_size);
-        memcpy(previous_subpacket_tail, sub_packet + valid_packet_size, previous_subpacket_tail_size);
-        printf("  * the new tail has size : %d\n", previous_subpacket_tail_size);
-
-        // move the offset in the video segment
-        segment_offset += sub_packet_size;
-    }
-
-    // if there is any tail leftover :
-    if (previous_subpacket_tail_size > 0)
-    {
-        unsigned char out[previous_subpacket_tail_size];
-        encryptMessage((char*) previous_subpacket_tail, previous_subpacket_tail_size,
-            (char*) out, counter_16bytes);
-        send_by_socket(out, previous_subpacket_tail_size);
-    }
-}
-
-
-void test_srds()
-{
-    printf("--- TEST SRDS Encryption \n");
-    test_encrypt();
-    return;
-/*
-    char* p = "Of recommend residence education be on difficult repulsive offending. Judge views had mirth table seems great him for her. Alone all happy asked begin fully stand own get. Excuse ye seeing result of we. See scale dried songs old may not. Promotion did disposing you household any instantly. Hills we do under times at first short an.";
-    int p_size = strlen(p);
-    char* c = (char*) malloc(p_size);
-
-    // encrypt a buffer
-    sgx_status_t enc_result = encrypt_ctr(p, p_size, c);
-    if (enc_result != SGX_SUCCESS)
-    {
-        printf("Encryption error in SGX.\n");
-        return;
-    }
-
-    // test 1 : decrypt the whole buffer
-    char* d = (char*) malloc(p_size);
-    sgx_status_t dec_result = decrypt_ctr(c, p_size, 0, d);
-    if (dec_result == SGX_SUCCESS)
-    {
-        printf("Test 1 passed. Plaintext : \n%s\n", d);
-    }
-    else
-    {
-        printf("Decryption error in SGX.\n");
-    }
-
-    // test 2 : decrypt pieces of 12 bytes from the buffer
-    int chunk_size = 48;
-    int offset = 0;
-    while(offset < p_size)
-    {
-        char* chunk = (char*) malloc(chunk_size + 1);
-        decrypt_ctr(c + offset, chunk_size, offset / 16, chunk);
-        offset += chunk_size;
-
-        {
-            // print message
-            if (offset > p_size)
-            {
-                chunk[p_size % chunk_size] = 0;
-            }
-            else
-            {
-                chunk[chunk_size] = 0;
-            }
-            printf("Chunk : %s\n", chunk);
-        }
-
-        free(chunk);
-    }
-
-    // clean-up
-    free(c);
-    free(d);
-    */
-}
-
-
-/*****************************************************************************
-******************************************************************************/
-
-void worker_loop()
-{
-    while(true)
-    {
-        //
-    }
-}
-
-void slave_re_key(char* buff)
+void file_re_key(char* meta_name)
 {
     // deserialize slave request
     unsigned char old_gk[32];
     unsigned char new_gk[32];
-    unsigned char iv[32];
 
     // split the input buffer in
+    printf("---- Working on metadata: %s\n", meta_name);
+
+    // ocall : bring metadata from REDIS
+    unsigned char* raw_metadata;
+    int raw_metadata_size = 0;
+    ocall_get_metadata(&raw_metadata_size, meta_name, &raw_metadata, raw_metadata_size);
+
+    // deserialize metadata
+    int number_of_blocks;
+    int number_of_super_encrypted_blocks;
+    unsigned char* enc_tail_fk;
+    unsigned char* enc_tail_sk;
+    unsigned char* tails_se[32];
+    unsigned char* tail_sgx;    // will not be used by the reader
+    unsigned char* iv;
+    deserialize_metadata_stream(
+        raw_metadata,
+        raw_metadata_size,
+        &number_of_blocks,
+        &number_of_super_encrypted_blocks,
+        &enc_tail_fk, // 32 bytes
+        &enc_tail_sk, // 32 bytes
+        tails_se,
+        &tail_sgx,
+        &iv);
+
+    // decrypt the SK by enclave key
+    unsigned char SK[32];
+    rsa_decryption(tail_sgx, 256,
+        rsaPrivateKey, strlen(rsaPrivateKey),
+        SK);
+
+    // decrypt the indexies of super encrypted blocks
+    std::vector<int> se_blocks;
+    for (int i=0; i<number_of_super_encrypted_blocks; i++)
+    {
+        unsigned char se_index_bytes[32];
+        sgx_aes_decrypt(tails_se[i], 32, SK, iv, se_index_bytes);
+        unsigned long se_index = 0;
+        byte_array_to_long(se_index_bytes, &se_index);
+        se_blocks.push_back((int) se_index);
+    }
+
+    // ocall : bring the blocks from the storage
+    for(int i=0; i<number_of_super_encrypted_blocks; i++)
+    {
+        // get the block
+        // TODO : ocall_get_block();
+
+        // get its hash
+        // ...
+
+        // re-key the block
+        // ...
+
+        // get its hash
+        // ...
+
+        // push back
+        // ...
+    }
+
+    // alter the metadata, push metadata to redis
+    // ...
 }
 
-void ecall_worker_re_key(
-    char* key,
-    size_t key_size,
-    char* metadata,
-    size_t meta_size)
+void ecall_worker_re_key(char* job_params, size_t job_params_size)
 {
-    test_srds();
+    // split the job params into tasks
+    char *p;
+    p = strtok(job_params,";");
+    while (p!= NULL)
+    {
+        //printf("---- %s\n",p);
+        file_re_key(p);
+        p = strtok(NULL, ";");
+    }
     return;
 
-    //printf("--- HELLO ECALL-REKEY-WORKER\n");
-
+/*
     int blocks_count;
     int enc_oeb_index_size;
     unsigned char* tail_fk;
@@ -617,6 +514,7 @@ void ecall_worker_re_key(
     // TODO : free up some of the space
     free(dec_enc_block);
     free(enc_enc_block);
+    */
 }
 
 /* ecall_sgx_cpuid:

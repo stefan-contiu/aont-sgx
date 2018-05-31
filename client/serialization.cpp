@@ -79,7 +79,7 @@ void deserialize_metadata_stream(
         inputStream += 32;
     }
 
-    memcpy(*p_tail_sgx, inputStream, 32);
+    memcpy(*p_tail_sgx, inputStream, 256);
     inputStream += 256;
 
     memcpy(*p_iv, inputStream, 32);
@@ -131,6 +131,8 @@ void serialize_metadata_to_stream(
     }
 
     memcpy(*meta_stream + stream_index, tail_sgx, 256);
+    //printf("SSGX : "); print_hex(tail_sgx, 64);
+    //printf("stre : "); print_hex(*meta_stream + stream_index, 64);
     stream_index += 256;
 
     memcpy(*meta_stream + stream_index, iv, 32);

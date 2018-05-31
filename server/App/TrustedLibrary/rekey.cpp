@@ -29,7 +29,6 @@ static inline void print_hex(unsigned char *h, int l)
     printf("\n");
 }
 
-
 #define LOCALHOST  "127.0.0.1"
 
 void worker_execute_job(char* workerName, char* params, size_t size);
@@ -71,7 +70,7 @@ class RedisCloud
             //cout<<"Response not recev"<<endl;
             return;
           }
-          printf("Message published.\n");
+          //printf("Message published.\n");
           //cout<<"message published"<<endl;
           redisAsyncDisconnect(async_c);
         }
@@ -92,8 +91,8 @@ class RedisCloud
             cmd.append(" ");
             cmd.append(value);
 
-            printf("value : %s\n", value.c_str());
-            printf("to redis : %s\n", cmd.c_str());
+            //printf("value : %s\n", value.c_str());
+            //printf("to redis : %s\n", cmd.c_str());
             redisAsyncCommand(async_c,
                        pubCallback,
                        (char*)"pub", cmd.c_str());
@@ -114,11 +113,13 @@ class RedisCloud
 
                     if (strncmp(r->element[1]->str, "termination", 11) == 0)
                     {
+                        printf("MASTER FINDS OUT TERMINATION %s : %s !!!\n", r->element[1]->str, r->element[2]->str);
+
                         // master handles termination ACK from workers
                         if (strlen(r->element[2]->str) > 0)
                         {
-                            //printf("SUB MESSAGE %s : %s !!!\n", r->element[1]->str, r->element[2]->str);
                             terminated.insert(r->element[2]->str);
+
                             if (terminated.size() == WORKERS_ALIVE)
                             {
                                 redisAsyncDisconnect(async_c);
@@ -128,8 +129,12 @@ class RedisCloud
                     else
                     {
                         // workers handle job request from master
-                        // TODO : fix size the last param
-                        worker_execute_job(r->element[1]->str, r->element[2]->str, 0);
+                        // FIX : we assume that the job string is null terminated - this should change if we
+                        // broadcast some binary data
+                        size_t job_size = strlen(r->element[2]->str);
+                        char* job = (char*) malloc(job_size);
+                        memcpy(job, r->element[2]->str, job_size);
+                        worker_execute_job(r->element[1]->str, job, job_size);
                     }
                 }
             }
@@ -213,9 +218,6 @@ struct event_base* RedisCloud::base;
 
 void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
-    RedisCloud::GetBinary(key, value, p_size);
-    return;
-
     std::string full_key_name = path + key;
     std::ifstream s(full_key_name);
     s.seekg(0, std::ifstream::end);
@@ -230,9 +232,6 @@ void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 
 void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
-    RedisCloud::PutBinary(key, value, size);
-    return;
-
     std::string full_key_name = path + key;
     std::ofstream s(full_key_name);
     s.write(reinterpret_cast<const char*>(value), size);
@@ -272,6 +271,22 @@ void ocall_put_block(char* key,
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("%d OCALL WRITE %f\n", content_size, time_spent);
+}
+
+int ocall_get_metadata(char* key, unsigned char **content, int s)
+{
+    unsigned char** c;
+    size_t content_size = 0;
+    std::string k(key);
+    RedisCloud::GetBinary(key, content, &content_size);
+    s = content_size;
+    return content_size;
+}
+
+void ocall_put_metadata(char* key, unsigned char* content, int content_size)
+{
+    std::string k(key);
+    RedisCloud::PutBinary(k, content, content_size);
 }
 
 void get_all_metadata_keys(std::vector<std::string>& metadata_keys)
@@ -382,7 +397,6 @@ void master_loop(void)
         }
 
         RedisCloud::Publish(workers[i], batch_files);
-        printf("Pub done\n");
     }
 
     // master subscribes and listens to termination of all workers
@@ -432,12 +446,17 @@ void master_loop(void)
 void worker_execute_job(char* worker_name, char* params, size_t size)
 {
     printf("WORKER %s> Do work...\n", worker_name);
-
-    // de-serialize parameters - mock the two encryption keys
-    unsigned char group_sealed_keys[64];
+    //printf("WORKER %s> Pushing to sgx :%s\n", worker_name, params);
+    //printf("WORKER %s> Size to sgx :%d\n", worker_name, size);
 
     // go to SGX enclave and do batch processing
-    usleep(5000 * 1000);
+
+    sgx_status_t ret = SGX_ERROR_UNEXPECTED;
+    ret = ecall_worker_re_key(global_eid, params, size);
+    if (ret != SGX_SUCCESS) abort();
+
+    // hack during dev time : sleep to simulate SGX work
+    usleep(1000);
 
     // signal to master that work is done
     std::string worker_done_key = "termination";
