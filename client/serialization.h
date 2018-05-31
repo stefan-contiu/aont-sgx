@@ -19,7 +19,7 @@ extern void byte_array_to_long(unsigned char* bytes, unsigned long* n);
 
 // Serialize/Deserialize to/from Storage Methods ----
 
-void serialize_metadata_to_file(
+void serialize_metadata_to_redis(
     char* file_name,
     int blocks_count,
     int se_blocks_count,

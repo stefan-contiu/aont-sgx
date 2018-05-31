@@ -18,7 +18,7 @@
 #include <algorithm>
 
 #include <hiredis.h>
-
+#include <random>
 
 std::vector<int> block_sizes{1024, 4 * 1024, 256 * 1024, 512 * 1024, 1024*1024, 2 * 1024*1024, 4 * 1024 * 1024};
 
@@ -166,6 +166,32 @@ int functional_tests(int block_size_in_bytes, int se_count)
     }
 
     printf("TEST PASSED\n");
+    return 0;
+}
+
+int write_files_according_to_distribution(int files_count, std::vector<int> distribution,
+    int min_size, int max_size,
+    int block_size_in_bytes,
+    int se_count)
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::discrete_distribution<> d(distribution.begin(), distribution.end());
+    unsigned char* gk = (unsigned char*) "12345678901234567890123456789012";
+
+    for(int i=0; i<files_count; i++)
+    {
+        int v = d(gen);
+        v = min_size + (v * (max_size - min_size) / distribution.size());
+        printf("Writing file with size : %d\n", v);
+
+        std::string file_name = "f_" + std::to_string(i) + ".dat";
+        unsigned char* random_content = gen_random_bytestream(v * 1024 * 1024);
+        std::string file_content((char*)random_content, v * 1024 * 1024);
+
+        write_file((char*)file_name.c_str(), file_content,
+            gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
+    }
 }
 
 int storage_test()
@@ -194,7 +220,6 @@ int storage_test()
 int main()
 {
     RedisCloud::Init();
-
     RedisCloud::FlushAll();
 
     //for(int i=1; i<block_sizes.size(); i++)
@@ -202,7 +227,21 @@ int main()
 
     //benchmark_aes();
     //benchmark_write();
-    functional_tests(64 * 1024, 3);
+    if (functional_tests(64 * 1024, 3) != 0)
+    {
+        printf("Execution stopped. Functional tests failed.\n");
+        return -1;
+    }
+    RedisCloud::FlushAll();
+
+    std::vector<int> test_distribution({2, 6, 2, 1});
+    write_files_according_to_distribution(
+        20, test_distribution, // write 20 files
+        4, 32,  // with sizes between 4 and 32 MB
+        512 * 1024, // with block sizes of 512 KB
+        3 // and with 3 se blocks/file
+        );
+
     //benchmark_write();
     //storage_test();
 

@@ -140,7 +140,7 @@ void serialize_metadata_to_stream(
 }
 
 
-void serialize_metadata_to_file(
+void serialize_metadata_to_redis(
     char* file_name,
     int blocks_count,
     int se_blocks_count,

@@ -239,7 +239,7 @@ std::pair<double, double> write_file(
 
     std::string meta_file_name = local_file_name + ".metadata";
 
-    serialize_metadata_to_file(
+    serialize_metadata_to_redis(
         (char*) meta_file_name.c_str(),
         number_of_blocks,
         SE_BLOCKS_COUNT,

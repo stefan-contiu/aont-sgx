@@ -4,14 +4,15 @@
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem::v1;
 
-static std::string path = "/home/stefan/code/aont/client/tmp_storage/";
+static std::string path = "/media/stefan/Windows/PHD/aont/";
 
 #include "redis.h"
 
 void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
-    RedisCloud::PutBinary(key, value, size);
-    return;
+    // CHANGE: write blocks to HDD, instead of Redis
+    //RedisCloud::PutBinary(key, value, size);
+    //return;
 
     std::string full_key_name = path + key;
     std::ofstream s(full_key_name);
@@ -21,9 +22,9 @@ void write_to_storage(std::string key, unsigned char* value, size_t size)
 
 void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
-    RedisCloud::GetBinary(key, value, p_size);
-    return;
-
+    // CHANGE: read blocks from HDD instead of Redis
+    // RedisCloud::GetBinary(key, value, p_size);
+    // return;
     std::string full_key_name = path + key;
     std::ifstream s(full_key_name);
     s.seekg(0, std::ifstream::end);
