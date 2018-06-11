@@ -100,7 +100,7 @@ std::pair<double, double> write_file(
     unsigned char* SK = gen_random_bytestream(32);
     unsigned char* iv = gen_random_bytestream(32);
     //printf("enc FK : "); print_hex(FK, 32);
-    printf("SK : "); print_hex(SK, 32);
+    //printf("SK : "); print_hex(SK, 32);
 
     int size = s.length();
     std::stringstream in_file(s);
@@ -125,7 +125,6 @@ std::pair<double, double> write_file(
     unsigned char* tail_sgx = (unsigned char*) malloc(256);
     memcpy(tail_sk, SK, 32);
     rsa_encryption(SK, 32, epk, epk_size, tail_sgx);
-    printf("TSGX : "); print_hex(tail_sgx, 64);
 
     // initialize tails
     unsigned char* tails_se[SE_BLOCKS_COUNT];

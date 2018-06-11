@@ -1,5 +1,5 @@
 #include "storage.h"
-
+#include "rest.h"
 #include <fstream>
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem::v1;
@@ -10,6 +10,9 @@ static std::string path = "/media/stefan/Windows/PHD/aont/";
 
 void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
+    rest_write_block(key, value, size);
+    return;
+
     // CHANGE: write blocks to HDD, instead of Redis
     //RedisCloud::PutBinary(key, value, size);
     //return;
@@ -22,6 +25,9 @@ void write_to_storage(std::string key, unsigned char* value, size_t size)
 
 void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
+    rest_read_block(key, value, p_size);
+    return;
+
     // CHANGE: read blocks from HDD instead of Redis
     // RedisCloud::GetBinary(key, value, p_size);
     // return;

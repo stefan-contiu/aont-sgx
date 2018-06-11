@@ -89,7 +89,6 @@ void deserialize_metadata_stream(
     unsigned char** p_tail_sgx,
     unsigned char** p_iv)
 {
-
     *p_blocks_count = unpack32(inputStream);
     inputStream += 4;
     *p_se_blocks_count = unpack32(inputStream);
@@ -381,15 +380,19 @@ void file_re_key(char* meta_name)
         blockName = blockName + "." + std::to_string(se_blocks[i]);
 
         // get the block
+        /*
         int block_size = 0;
-        // TODO : enc_block SIZE should come as a parameter
-        unsigned char* enc_block = (unsigned char*) malloc(1024 * 512);
+        unsigned char* enc_block;
         ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
-        printf("Loaded %s of size %d\n", blockName.c_str(), block_size);
+        print_hex(enc_block, 90);
+        */
+        unsigned char* enc_block = (unsigned char*) malloc(1024 * 1024);
+        int block_size;
+        ocall_get_block_ex(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
 
         // get its hash, xor it out of tail_sk
         {
-            unsigned char* enc_block_sha = (unsigned char*) malloc(32);
+            unsigned char enc_block_sha[32];
             sgx_sha256(enc_block, block_size, enc_block_sha);
             xor_into_array(tail_sk, enc_block_sha, 32);
         }
@@ -402,11 +405,13 @@ void file_re_key(char* meta_name)
 
         // get its hash, xor it into tail_sk
         {
-            unsigned char* enc_enc_block_sha = (unsigned char*) malloc(32);
+            unsigned char enc_enc_block_sha[32];;
             sgx_sha256(enc_enc_block, block_size, enc_enc_block_sha);
             xor_into_array(tail_sk, enc_enc_block_sha, 32);
         }
 
+
+        free(enc_block);
         // push back block
         ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
     }
@@ -435,7 +440,8 @@ void file_re_key(char* meta_name)
     ocall_put_metadata(meta_name, new_metadata, new_metadata_size);
 
     // clean-up
-    // TODO : ...
+    free(new_metadata);
+    //free(raw_metadata);
 }
 
 void ecall_worker_re_key(char* job_params, size_t job_params_size)
@@ -445,112 +451,10 @@ void ecall_worker_re_key(char* job_params, size_t job_params_size)
     p = strtok(job_params,";");
     while (p!= NULL)
     {
-        //printf("---- %s\n",p);
         file_re_key(p);
         p = strtok(NULL, ";");
     }
     return;
-
-/*
-    int blocks_count;
-    int enc_oeb_index_size;
-    unsigned char* tail_fk;
-    unsigned char* tail_bi;
-    unsigned char* enc_oeb_index;
-    unsigned char* iv;
-
-    deserialize_metadata_stream((unsigned char*)metadata, meta_size,
-        &blocks_count,
-        &enc_oeb_index_size,
-        &tail_fk, // 32 bytes
-        &tail_bi, // 32 bytes
-        &enc_oeb_index, // enc_oeb_index_size bytes
-        &iv);
-
-    //printf("SGX says %d blocks\n", blocks_count);
-    //printf("SGX says %d enc_oeb_index_size\n", enc_oeb_index_size);
-    //print_hex(enc_oeb_index, 256);
-
-    // decrypt OEB index
-    long unsigned oeb;
-    unsigned char* dec_oeb_index = (unsigned char*) malloc(4096);
-    rsa_decryption(enc_oeb_index, enc_oeb_index_size,
-        rsaPrivateKey, strlen(rsaPrivateKey),
-        dec_oeb_index);
-    byte_array_to_long(dec_oeb_index, &oeb);
-    printf("SGX says SE Block Index %d\n", (int)oeb);
-
-    // bring the over-encrypted block in the enclave (OCALL)
-    std::string blockName = std::string(key, key_size);
-    //printf("SGX blockName initial : %s\n", blockName.c_str());
-    // strip .metadata suffix and add block index
-    blockName.replace(blockName.size() - 9, 9, "");
-    blockName = blockName + "." + std::to_string(oeb);
-
-    unsigned char* enc_block = (unsigned char*) malloc(1024 * 256 * 4);
-    int block_size = 0;
-    int s;
-    ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, s);
-    //printf("SGX Block returned from OCALL size : %d\n", block_size);
-    //print_hex(enc_block, 32);
-
-    // decrypt it by using old_gk
-    unsigned char* dec_enc_block = (unsigned char*) malloc(block_size);
-    sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
-
-    // encrypt it by using new_gk
-    unsigned char* enc_enc_block = (unsigned char*) malloc(block_size);
-    sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
-
-    // push it back to the storage (OCALL)
-    ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
-
-
-    // encrypt the tail by using the group_key
-    unsigned char* dec_tail_fk = (unsigned char*) malloc(32);
-    unsigned char* dec_tail_bi = (unsigned char*) malloc(32);
-    sgx_aes_decrypt(tail_fk, 32, old_gk, iv, dec_tail_fk);
-    sgx_aes_decrypt(tail_bi, 32, old_gk, iv, dec_tail_bi);
-
-    // adjust the tail_bi, xor with the old and new block hash
-    unsigned char* enc_block_sha = (unsigned char*) malloc(32);
-    sgx_sha256(enc_block, block_size, enc_block_sha);
-    xor_into_array(dec_tail_bi, enc_block_sha, 32);
-
-    unsigned char* enc_enc_block_sha = (unsigned char*) malloc(32);
-    sgx_sha256(enc_enc_block, block_size, enc_enc_block_sha);
-    xor_into_array(dec_tail_bi, enc_enc_block_sha, 32);
-
-    unsigned char* new_tail_fk = (unsigned char*) malloc(32);
-    unsigned char* new_tail_bi = (unsigned char*) malloc(32);
-    sgx_aes_encrypt(dec_tail_fk, 32, new_gk, iv, new_tail_fk);
-    sgx_aes_encrypt(dec_tail_bi, 32, new_gk, iv, new_tail_bi);
-    printf("TAIL BI : "); print_hex(new_tail_bi, 32);
-
-    // metadata file: blocks count, tail_fk (32), tail_bk (32), enc_oeb_index, iv (32)
-    std::string meta_file_name = blockName + ".metadata";
-    unsigned char* meta_stream;
-    int meta_stream_size;
-    //printf("Blocks Count %d\n", blocks_count);
-    serialize_metadata_to_stream(
-        &meta_stream,
-        &meta_stream_size,
-        blocks_count,
-        enc_oeb_index_size,
-        new_tail_fk, // 32 bytes
-        new_tail_bi, // 32 bytes
-        enc_oeb_index, // enc_oeb_index_size bytes
-        iv);
-
-    // push back metadata to the storage
-    ocall_put_block(key, meta_stream, meta_stream_size);
-
-    //printf("--- BYE ECALL-REKEY-WORKER\n");
-
-    // TODO : free up some of the space
-    free(dec_enc_block);
-    free(enc_enc_block);
-    */
 }
 
 /* ecall_sgx_cpuid:

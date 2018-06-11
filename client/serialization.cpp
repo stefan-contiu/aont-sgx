@@ -1,4 +1,5 @@
 #include "redis.h"
+#include "rest.h"
 #include "serialization.h"
 
 #include <string>
@@ -166,7 +167,7 @@ void serialize_metadata_to_redis(
         tail_sgx, //256 bytes
         iv);
 
-    RedisCloud::PutBinary(file_name, m, m_size);
+    rest_write_metadata(file_name, m, m_size);
 }
 
 void deserialize_metadata_file(
@@ -182,7 +183,8 @@ void deserialize_metadata_file(
     unsigned char* m;
     size_t file_size;
 
-    RedisCloud::GetBinary(file_name, &m, &file_size);
+    rest_read_metadata(file_name, &m, &file_size);
+    //RedisCloud::GetBinary(file_name, &m, &file_size);
 
     deserialize_metadata_stream(
         m,

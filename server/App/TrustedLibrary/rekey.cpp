@@ -244,8 +244,6 @@ int ocall_get_block(char* key, unsigned char **content, int s)
 {
     clock_t begin = clock();
 
-    unsigned char** c;
-
     //printf("OCALL GET BLOCK Key %s\n", key);
     size_t content_size = 0;
     std::string k(key);
@@ -262,9 +260,37 @@ int ocall_get_block(char* key, unsigned char **content, int s)
     return content_size;
 }
 
+int ocall_get_block_ex(char* k,
+    unsigned char **content, int size)
+{
+    //print_hex(*content, 64);
+    //memcpy(content, "123456", 6);
+    //
+    //return 0;
+    //size_t content_size = 0;
+    //memcpy(content, "123456", 6);
+
+    std::string key(k);
+    std::string full_key_name = path + key;
+    std::ifstream s(full_key_name);
+    s.seekg(0, std::ifstream::end);
+    int file_size = s.tellg();
+    size = file_size;
+    //printf("FILE %s SIZE = %d\n", full_key_name.c_str(), file_size);
+
+    s.seekg(0);
+
+    s.read(reinterpret_cast<char*>(*content), file_size);
+    //(*p_size) = file_size;
+    s.close();
+
+    return file_size;
+}
+
 void ocall_put_block(char* key,
     unsigned char* content, int content_size)
 {
+    // TODO : I think that content should be passed as an "in" in EDL
     clock_t begin = clock();
 //printf("OCALL PUT BLOCK Key %s\n", key);
     std::string k(key);
@@ -445,7 +471,7 @@ void worker_execute_job(char* worker_name, char* params, size_t size)
     if (ret != SGX_SUCCESS) abort();
 
     // hack during dev time : sleep to simulate SGX work
-    usleep(1000);
+    //usleep(1000);
 
     // signal to master that work is done
     std::string worker_done_key = "termination";

@@ -1,4 +1,6 @@
 #include <pistache/endpoint.h>
+#include <stdio.h>
+#include <pistache/common.h>
 
 // test read    : curl http://127.0.0.1:9080/read_metadata/f1.txt.1
 // test write   : curl --request POST  http://127.0.0.1:9080/write_metadata/f1.txt.1
@@ -10,7 +12,7 @@ struct CloudHandler : public Http::Handler {
 
     void onRequest(const Http::Request& req, Http::ResponseWriter writer)
     {
-
+        printf("Received %s.\n", req.resource().c_str());
         if (req.method() == Http::Method::Get)
         {
             std::string req_cmd = req.resource();
@@ -44,16 +46,23 @@ struct CloudHandler : public Http::Handler {
             std::string content = req.body();
             if (req_cmd.compare(0, meta_cmd.length(), meta_cmd) == 0)
             {
-                writer.send(Http::Code::Ok, "Write Metadata Succesfull");
+                std::string meta_name = req_cmd.substr(meta_cmd.length());
+                printf("Store metadata %s of %d size.\n", meta_name.c_str(), content.length());
+                //writer.send(Http::Code::Ok, "Write Metadata Succesfull");
+                writer.send(Http::Code::Ok);
             }
             else if (req_cmd.compare(0, block_cmd.length(), block_cmd) == 0)
             {
-                writer.send(Http::Code::Ok, "Write Block Succesfull");
+                std::string block_name = req_cmd.substr(block_cmd.length());
+                printf("Store block %s of %d size.\n", block_name.c_str(), content.length());
+
+                //writer.send(Http::Code::Ok, "Write Block Succesfull");
                 // find (greedy) available harddrive based on file name
 
                 // write the file content to the storage
 
                 // write the metadata to REDIS
+                writer.send(Http::Code::Ok);
             }
             else
             {
@@ -68,6 +77,8 @@ struct CloudHandler : public Http::Handler {
 };
 
 int main() {
+    printf("Max buffer size : %d\n", Pistache::Const::MaxBuffer);
+
     // should receive args:
     // -ms metadata_server_ip -hd ip1;ip2;ip3;
     Http::listenAndServe<CloudHandler>("*:9080");

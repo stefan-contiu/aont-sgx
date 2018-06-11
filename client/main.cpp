@@ -183,7 +183,7 @@ int write_files_according_to_distribution(int files_count, std::vector<int> dist
     {
         int v = d(gen);
         v = min_size + (v * (max_size - min_size) / distribution.size());
-        printf("Writing file with size : %d\n", v);
+        printf("Writing file %d of %d with size : %d\n", i, files_count, v);
 
         std::string file_name = "f_" + std::to_string(i) + ".dat";
         unsigned char* random_content = gen_random_bytestream(v * 1024 * 1024);
@@ -191,6 +191,8 @@ int write_files_according_to_distribution(int files_count, std::vector<int> dist
 
         write_file((char*)file_name.c_str(), file_content,
             gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
+
+        free(random_content);
     }
 }
 
@@ -227,18 +229,19 @@ int main()
 
     //benchmark_aes();
     //benchmark_write();
-//    if (functional_tests(64 * 1024, 3) != 0)
-//    {
-//        printf("Execution stopped. Functional tests failed.\n");
-//        return -1;
-//    }
+    if (functional_tests(64 * 1024, 3) != 0)
+    {
+        printf("Execution stopped. Functional tests failed.\n");
+        return -1;
+    }
     RedisCloud::FlushAll();
 
+    return 0;
     std::vector<int> test_distribution({2, 6, 2, 1});
     write_files_according_to_distribution(
         10, test_distribution, // write 20 files
-        4, 32,  // with sizes between 4 and 32 MB
-        512 * 1024, // with block sizes of 512 KB
+        4, 64,  // with sizes between 4 and 64 MB
+        1024 * 1024, // with block sizes of 1 MB
         3 // and with 3 se blocks/file
         );
 
