@@ -7,6 +7,10 @@
 #include <unistd.h>
 #include <cstdlib>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 static char _hack_rsaPrivateKey[]="-----BEGIN RSA PRIVATE KEY-----\n"\
 "MIIEowIBAAKCAQEAy8Dbv8prpJ/0kKhlGeJYozo2t60EG8L0561g13R29LvMR5hy\n"\
 "vGZlGJpmn65+A4xHXInJYiPuKzrKUnApeLZ+vw1HocOAZtWK0z3r26uA8kQYOKX9\n"\
@@ -48,6 +52,11 @@ extern "C" {
 unsigned char* gen_random_bytestream(int n)
 {
     unsigned char* stream = (unsigned char*) malloc(n + 1);
+
+    //int fd = open("/dev/urandom", O_RDONLY);
+    //read(fd, stream, n);
+    return stream;
+
     size_t i;
     for (i = 0; i < n; i++)
     {
