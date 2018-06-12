@@ -1,6 +1,6 @@
 all:
 	g++ -std=c++17 client.cpp serialization.cpp storage.cpp crypto.cpp redis.cpp rest.cpp -g main.cpp  \
-	-lgmp -lpbc -lssl -lcrypto -lm -lpthread -lcurl \
+	-lssl -lcrypto -lm -lpthread -lcurl \
 	-o cli-aont.o -lstdc++fs
 
 .PHONY: clean
