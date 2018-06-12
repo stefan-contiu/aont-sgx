@@ -1,4 +1,4 @@
-#include "redis.h"
+//#include "redis.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "crypto.h"
@@ -17,13 +17,14 @@
 
 #include <algorithm>
 
-#include <hiredis.h>
+//#include <hiredis.h>
 #include <random>
 
 std::vector<int> block_sizes{1024, 4 * 1024, 256 * 1024, 512 * 1024, 1024*1024, 2 * 1024*1024, 4 * 1024 * 1024};
 
 void benchmark_write(int reps=10)
 {
+    /*
     unsigned char* old_gk = gen_random_bytestream(32); //(unsigned char*) "12345678901234567890123456789012";
     //std::vector<int> block_sizes{1024, 4 * 1024, 256 * 1024, 512 * 1024, 768*1024, 1024 * 1024, 2 * 1024 * 1024, 4*1024*1024};
 
@@ -93,15 +94,14 @@ void benchmark_write(int reps=10)
 
         RedisCloud::FlushAll();
 
-/*
         begin = clock();
         read_file("file.txt", old_gk, "temp.dat", block_sizes[i]);
         end = clock();
         time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
         read.push_back(time_spent);
         printf("%f\n", time_spent);
-*/
     }
+    */
 }
 
 void feed_rekey(int block_size)
@@ -221,22 +221,25 @@ int storage_test()
 
 int main()
 {
-    RedisCloud::Init();
-    RedisCloud::FlushAll();
+    //RedisCloud::Init();
+    //RedisCloud::FlushAll();
 
     //for(int i=1; i<block_sizes.size(); i++)
     //    feed_rekey(block_sizes[i]);
 
     //benchmark_aes();
     //benchmark_write();
+/*
     if (functional_tests(64 * 1024, 3) != 0)
     {
         printf("Execution stopped. Functional tests failed.\n");
         return -1;
     }
-    RedisCloud::FlushAll();
+
+    //RedisCloud::FlushAll();
 
     return 0;
+*/
     std::vector<int> test_distribution({2, 6, 2, 1});
     write_files_according_to_distribution(
         10, test_distribution, // write 20 files
@@ -248,5 +251,5 @@ int main()
     //benchmark_write();
     //storage_test();
 
-    RedisCloud::Bye();
+    //RedisCloud::Bye();
 }

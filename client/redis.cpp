@@ -1,3 +1,4 @@
+/*
 #include "redis.h"
 #include <cpp_redis/cpp_redis>
 #include <iostream>
@@ -5,3 +6,4 @@
 
 //cpp_redis::redis_client RedisCloud::client;
 redisContext* RedisCloud::c;
+*/

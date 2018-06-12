@@ -6,7 +6,7 @@ namespace fs = std::experimental::filesystem::v1;
 
 static std::string path = "/media/stefan/Windows/PHD/aont/";
 
-#include "redis.h"
+//#include "redis.h"
 
 void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
