@@ -32,15 +32,18 @@
 ######## SGX SDK Settings ########
 
 SGX_SDK ?= /opt/intel/sgxsdk
+SGX_SSL ?= /opt/intel/sgxssl
+HIREDIS ?= ../../hiredis
+
 #SGX_MODE ?= HW
 SGX_MODE ?= HW
 SGX_ARCH ?= x64
 SGX_DEBUG ?= 1
 
-SGX_SSL_INCLUDE := /home/stefan/code/sgx/intel-sgx-ssl-2/intel-sgx-ssl/include
-SGXSSL_TRUSTED_LIB_PATH := /home/stefan/code/sgx/intel-sgx-ssl-2/intel-sgx-ssl/lib64/debug
-SGXSSL_TRUSTED_LIBS := $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_tsgxssl_crypto.a $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_tsgxssl.a /home/stefan/code/hiredis/libhiredis.a
-SGXSSL_UNTRUSTED_LIBS := $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_usgxssl.a /home/stefan/code/hiredis/libhiredis.a
+SGX_SSL_INCLUDE := $(SGX_SSL)/include
+SGXSSL_TRUSTED_LIB_PATH := $(SGX_SSL)/lib64/
+SGXSSL_TRUSTED_LIBS := $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_tsgxssl_crypto.a $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_tsgxssl.a $(HIREDIS)/libhiredis.a
+SGXSSL_UNTRUSTED_LIBS := $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_usgxssl.a $(HIREDIS)/libhiredis.a
 
 ifeq ($(shell getconf LONG_BIT), 32)
 	SGX_ARCH := x86
@@ -81,7 +84,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(wildcard App/Edger8rSyntax/*.cpp) $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IInclude -IApp -I$(SGX_SDK)/include -I/home/stefan/code/hiredis/
+App_Include_Paths := -IInclude -IApp -I$(SGX_SDK)/include -I$(HIREDIS)
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -219,8 +222,8 @@ App/%.o: App/%.cpp
 	@$(CXX) $(App_Cpp_Flags) -c $< -o $@
 	@echo "CXX  <=  $<"
 
-$(App_Name): App/Enclave_u.o $(App_Cpp_Objects) /home/stefan/code/hiredis/libhiredis.a
-	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L/home/stefan/code/hiredis/ -lsgx_usgxssl -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core
+$(App_Name): App/Enclave_u.o $(App_Cpp_Objects) $(HIREDIS)/libhiredis.a $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_usgxssl.a
+	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L$(HIREDIS) -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core
 	@echo "LINK =>  $@"
 
 .config_$(Build_Mode)_$(SGX_ARCH):

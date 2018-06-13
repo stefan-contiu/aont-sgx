@@ -68,6 +68,9 @@ enclave {
             [out] unsigned char **content, int s);
 
         void ocall_put_metadata([in, string] char* key,
-            [user_check] unsigned char* content, int content_size);
+            [in, size=content_size] unsigned char* content, int content_size);
+
+        int ocall_get_block_ex([in, string] char* key,
+            [in] unsigned char **content, int s);
     };
 };
