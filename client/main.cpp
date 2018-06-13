@@ -172,7 +172,8 @@ int functional_tests(int block_size_in_bytes, int se_count)
 int write_files_according_to_distribution(int files_count, std::vector<int> distribution,
     int min_size, int max_size,
     int block_size_in_bytes,
-    int se_count)
+    int se_count,
+    std::string file_prefix)
 {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -185,7 +186,7 @@ int write_files_according_to_distribution(int files_count, std::vector<int> dist
         v = min_size + (v * (max_size - min_size) / distribution.size());
         printf("Writing file %d of %d with size : %d\n", i, files_count, v);
 
-        std::string file_name = "f_" + std::to_string(i) + ".dat";
+        std::string file_name = file_prefix + "f_" + std::to_string(i) + ".dat";
         unsigned char* random_content = gen_random_bytestream(v * 1024 * 1024);
         std::string file_content((char*)random_content, v * 1024 * 1024);
 
@@ -219,7 +220,7 @@ int storage_test()
 }
 
 
-int main()
+int main(int argc, char **argv)
 {
     //RedisCloud::Init();
     //RedisCloud::FlushAll();
@@ -240,13 +241,19 @@ int main()
 
     return 0;
 */
-    std::vector<int> test_distribution({2, 6, 2, 1});
+
+    std::string file_prefix = "";
+    if (argc == 2)
+    {
+        file_prefix.assign(argv[1], strlen(argv[1]));
+    }
+    std::vector<int> test_distribution({4, 3, 4, 7, 1});
     write_files_according_to_distribution(
-        10, test_distribution, // write 20 files
-        4, 64,  // with sizes between 4 and 64 MB
-        1024 * 1024, // with block sizes of 1 MB
-        3 // and with 3 se blocks/file
-        );
+        100, test_distribution, // write 20 files
+        12, 1024,  // with sizes between 12 MB and 1 GB
+        4 * 1024 * 1024, // with block sizes of 4 MB
+        1, // and with 1 se blocks/file
+        file_prefix);
 
     //benchmark_write();
     //storage_test();
