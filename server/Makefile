@@ -245,7 +245,7 @@ Enclave/%.o: Enclave/%.cpp
 	@echo "CXX  <=  $<"
 
 $(Enclave_Name): Enclave/Enclave_t.o $(Enclave_Cpp_Objects)
-	@$(CXX) $^ -lsgx_tstdc -lsgx_tcxx -Wl,--whole-archive -lsgx_tsgxssl -Wl,--no-whole-archive -lsgx_tsgxssl_crypto -lsgx_tsetjmp -L$(SGXSSL_TRUSTED_LIB_PATH) -o $@ $(Enclave_Link_Flags)
+	@$(CXX) $^ -lsgx_tstdc -lsgx_tcxx -Wl,--whole-archive -lsgx_tsgxssl -Wl,--no-whole-archive -lsgx_tsgxssl_crypto -L$(SGXSSL_TRUSTED_LIB_PATH) -o $@ $(Enclave_Link_Flags)
 	@echo "LINK =>  $@"
 	@echo "wLINK PARAMS => " $(Enclave_Link_Flags)
 
