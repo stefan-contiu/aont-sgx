@@ -252,8 +252,8 @@ int main(int argc, char **argv)
     std::vector<int> test_distribution({4, 3, 4, 7, 1});
     write_files_according_to_distribution(
         files_count, test_distribution, // write files
-        12, 1024,  // with sizes between 12 MB and 1 GB
-        4 * 1024 * 1024, // with block sizes of 4 MB
+        4, 12,  // with sizes between 12 MB and 1 GB
+        1 * 1024 * 1024, // with block sizes of 1 MB
         1, // and with 1 se blocks/file
         file_prefix);
 
