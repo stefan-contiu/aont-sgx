@@ -21,7 +21,7 @@
 namespace fs = std::experimental::filesystem::v1;
 
 // ---------------------------------------------------------
-#define REDIS_CLOUD "192.168.1.111"
+#define REDIS_CLOUD "192.168.1.112"
 static std::string path = "/hdd/";
 // ---------------------------------------------------------
 
@@ -371,6 +371,8 @@ Master uses the list of respondents to perform a GroupSeal operation (hybrid enc
 
 void master_loop(std::vector<std::string> workers)
 {
+    printf("MASTER> Starting master loop\n");
+
     struct timeval diff, startTV, endTV;
     gettimeofday(&startTV, NULL);
 

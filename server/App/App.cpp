@@ -260,7 +260,7 @@ int SGX_CDECL main(int argc, char *argv[])
             }
             master_loop(workers);
         }
-        else if (strncmp(argv[1], "worker", 6) != 0)
+        else if (strncmp(argv[1], "worker", 6) == 0)
         {
             worker_loop(argv[2]);
         }
