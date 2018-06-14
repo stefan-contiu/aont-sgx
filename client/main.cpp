@@ -243,13 +243,15 @@ int main(int argc, char **argv)
 */
 
     std::string file_prefix = "";
-    if (argc == 2)
+    int files_count = 10;
+    if (argc == 3)
     {
         file_prefix.assign(argv[1], strlen(argv[1]));
+        files_count = atoi(argv[2]);
     }
     std::vector<int> test_distribution({4, 3, 4, 7, 1});
     write_files_according_to_distribution(
-        100, test_distribution, // write 20 files
+        files_count, test_distribution, // write files
         12, 1024,  // with sizes between 12 MB and 1 GB
         4 * 1024 * 1024, // with block sizes of 4 MB
         1, // and with 1 se blocks/file
