@@ -14,12 +14,16 @@
 #include <unistd.h>
 
 #include <set>
+#include <map>
 
 #include <fstream>
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem::v1;
 
-static std::string path = "/media/stefan/Windows/PHD/aont/";
+// ---------------------------------------------------------
+#define REDIS_CLOUD "192.168.1.111"
+static std::string path = "/hdd/";
+// ---------------------------------------------------------
 
 static inline void print_hex(unsigned char *h, int l)
 {
@@ -28,7 +32,6 @@ static inline void print_hex(unsigned char *h, int l)
     printf("\n");
 }
 
-#define LOCALHOST  "127.0.0.1"
 
 void worker_execute_job(char* workerName, char* params, size_t size);
 
@@ -50,7 +53,7 @@ class RedisCloud
         {
             struct timeval timeout = { 1, 500000 }; // 1.5 seconds
 
-            c = redisConnectWithTimeout(LOCALHOST, 6379, timeout);
+            c = redisConnectWithTimeout(REDIS_CLOUD, 6379, timeout);
             if (c == NULL || c->err) {
                 if (c) {
                     printf("Connection error: %s\n", c->errstr);
@@ -78,7 +81,7 @@ class RedisCloud
         {
             signal(SIGPIPE, SIG_IGN);
             struct event_base* base = event_base_new();
-            async_c = redisAsyncConnect(LOCALHOST, 6379);
+            async_c = redisAsyncConnect(REDIS_CLOUD, 6379);
             if (async_c->err) {
                 printf("error: %s\n", async_c->errstr);
                 return;
@@ -146,7 +149,7 @@ class RedisCloud
             signal(SIGPIPE, SIG_IGN);
             struct event_base* base = event_base_new();
 
-            async_c = redisAsyncConnect(LOCALHOST, 6379);
+            async_c = redisAsyncConnect(REDIS_CLOUD, 6379);
             if (async_c->err) {
                 printf("error: %s\n", async_c->errstr);
                 return;
@@ -386,11 +389,68 @@ void master_loop(std::vector<std::string> workers)
 
     // get all the metadata files
     std::vector<std::string> metadata_files;
-    //RedisCloud::InitAsync();
     RedisCloud::FillMetadata(metadata_files);
     int M = metadata_files.size();
     printf("MASTER> total files to re-key : %d\n", M);
 
+    // for each file bring its storage ID
+    std::map<std::string, std::vector<std::string> > files_per_storage;
+    for(int i=0; i<metadata_files.size(); i++)
+    {
+        // cut .metadata suffix
+        int l = metadata_files[i].length();
+        std::string s = metadata_files[i].substr(0, l - 9);
+
+        // get storage from redis
+        unsigned char* st;
+        size_t size;
+        RedisCloud::GetBinary(s, &st, &size);
+        std::string storage((char*)st, size);
+
+        // if storage exists as a key, push_back to value
+        files_per_storage[storage].push_back(metadata_files[i]);
+        /*
+        if (files_per_storage.count(storage) > 0)
+        {
+
+        }
+        else
+        {
+
+        }
+        // else create a new value
+        */
+    }
+
+    // broadcast to each worker its batch
+    std::map<std::string, std::vector<std::string>>::iterator it = files_per_storage.begin();
+    while (it != files_per_storage.end())
+    {
+        printf("MASTER> Broadcast to Worker %s : \n", it->first.c_str());
+
+        std::string batch_files = "";
+        for (int i = 0; i < it->second.size(); i++)
+        {
+            batch_files += it->second[i] + ";";
+        }
+
+        printf("MASTER> Broadcast Value : %s\n", batch_files.c_str());
+
+        // TODO : uncomment this line
+        //RedisCloud::Publish(it->first, batch_files);
+
+        // go to next worker
+        it++;
+    }
+
+    // for each
+
+    // for each storage:
+    //      * get list of files at storage
+    //      * get available Workers at storage
+    //      * split list of files per number of workers
+    //      * broadcast to each worker its batch
+/*
     // split M files into N batches
     int batch_size = (int) ceil((double)M / WORKERS_ALIVE);
     for(int i = 0; i < WORKERS_ALIVE; i++)
@@ -413,14 +473,12 @@ void master_loop(std::vector<std::string> workers)
 
         RedisCloud::Publish(workers[i], batch_files);
     }
-
+*/
     // master subscribes and listens to termination of all workers
     RedisCloud::Subscribe("termination");
 
     RedisCloud::Bye();
-
     printf("MASTER> All Workers Terminated!\n");
-
     gettimeofday(&endTV, NULL);
     timersub(&endTV, &startTV, &diff);
     printf("*** time taken = %ld.%ld (s)\n", diff.tv_sec, diff.tv_usec);
