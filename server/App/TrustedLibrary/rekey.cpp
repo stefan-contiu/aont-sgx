@@ -369,7 +369,7 @@ Master uses the list of respondents to perform a GroupSeal operation (hybrid enc
 [ ] Do just single encryption, not super encryption: randomly chose K shielded blocks encrypted by GK, all the rest encrypted by FK.
 */
 
-void master_loop(std::vector<std::string> workers)
+void master_loop(std::vector<std::string> workers, int do_full_aes)
 {
     printf("MASTER> Starting master loop\n");
 
@@ -431,6 +431,11 @@ void master_loop(std::vector<std::string> workers)
         printf("MASTER> Broadcast to Worker %s : \n", it->first.c_str());
 
         std::string batch_files = "";
+        if (do_full_aes)
+        {
+            batch_files.append("full_aes:");
+        }
+
         for (int i = 0; i < it->second.size(); i++)
         {
             batch_files += it->second[i] + ";";

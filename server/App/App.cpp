@@ -249,7 +249,7 @@ int SGX_CDECL main(int argc, char *argv[])
     }
     else
     {
-        if (strncmp(argv[1], "master", 6) == 0)
+        if (strncmp(argv[1], "master", 6) == 0 || strncmp(argv[1], "full_aes_master", 15) == 0)
         {
             // parse the workers, pass them to the master
             std::vector<std::string> workers;
@@ -258,7 +258,9 @@ int SGX_CDECL main(int argc, char *argv[])
                 std::string s(argv[i]);
                 workers.push_back(s);
             }
-            master_loop(workers);
+
+            int do_full_aes = (strncmp(argv[1], "full_aes_master", 15) == 0);
+            master_loop(workers, do_full_aes);
         }
         else if (strncmp(argv[1], "worker", 6) == 0)
         {

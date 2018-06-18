@@ -313,6 +313,68 @@ unsigned char* sgx_sha256(const unsigned char *d,
     return SHA256(d, n, md);
 }
 
+
+void full_aes_file_re_key(char* meta_name)
+{
+    // mock the sealed group keys
+    unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
+    unsigned char* new_gk = (unsigned char*) "xxx45678901234567890123456789012";
+
+    // split the input buffer in
+    printf("---- Working on metadata: %s\n", meta_name);
+
+    // ocall : bring metadata from REDIS
+    unsigned char* raw_metadata;
+    int raw_metadata_size = 0;
+    ocall_get_metadata(&raw_metadata_size, meta_name, &raw_metadata, raw_metadata_size);
+
+    // deserialize metadata
+    int number_of_blocks;
+    int number_of_super_encrypted_blocks;
+    unsigned char* enc_tail_fk;
+    unsigned char* enc_tail_sk;
+    unsigned char* tails_se[32];
+    unsigned char* tail_sgx;    // will not be used by the reader
+    unsigned char* iv;
+    deserialize_metadata_stream(
+        raw_metadata,
+        raw_metadata_size,
+        &number_of_blocks,
+        &number_of_super_encrypted_blocks,
+        &enc_tail_fk, // 32 bytes
+        &enc_tail_sk, // 32 bytes
+        tails_se,
+        &tail_sgx,
+        &iv);
+
+    // get each block, decrypt-it, encrypt-it and push it back
+    // ocall : bring the blocks from the storage
+    for(int i=0; i<number_of_blocks; i++)
+    {
+        std::string blockName = std::string(meta_name);
+        // strip .metadata suffix and add block index, move out of the loop
+        blockName.replace(blockName.size() - 9, 9, "");
+        blockName = blockName + "." + std::to_string(i);
+
+        // get the block
+        unsigned char* enc_block = (unsigned char*) malloc(1024 * 1024);
+        int block_size;
+        ocall_get_block_ex(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
+
+        // re-key the block
+        unsigned char dec_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+        unsigned char enc_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
+
+        // push back to storage
+        free(enc_block);
+        ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
+    }
+
+    // no need to push metadata
+}
+
 void file_re_key(char* meta_name)
 {
     // deserialize slave request
@@ -446,12 +508,27 @@ void file_re_key(char* meta_name)
 
 void ecall_worker_re_key(char* job_params, size_t job_params_size)
 {
+    int full_aes_rekey = 0;
+    if (strncmp(job_params, "full_aes:", 9) == 0)
+    {
+        // remove "full_aes:"
+        job_params += 9;
+        full_aes_rekey = 1;
+    }
+
     // split the job params into tasks
     char *p;
     p = strtok(job_params,";");
     while (p!= NULL)
     {
-        file_re_key(p);
+        if (full_aes_rekey)
+        {
+            full_aes_file_re_key(p);
+        }
+        else
+        {
+            file_re_key(p);
+        }
         p = strtok(NULL, ";");
     }
     return;

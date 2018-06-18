@@ -61,7 +61,7 @@ extern sgx_enclave_id_t global_eid;    /* global enclave id */
 extern "C" {
 #endif
 
-void master_loop(std::vector<std::string> workers);
+void master_loop(std::vector<std::string> workers, int do_full_aes);
 void worker_loop(char* worker_name);
 
 #if defined(__cplusplus)
