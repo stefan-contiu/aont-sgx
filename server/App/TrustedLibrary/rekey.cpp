@@ -439,7 +439,7 @@ void master_loop(std::vector<std::string> workers)
         printf("MASTER> Broadcast Value : %s\n", batch_files.c_str());
 
         // TODO : uncomment this line
-        //RedisCloud::Publish(it->first, batch_files);
+        RedisCloud::Publish(it->first, batch_files);
 
         // go to next worker
         it++;
