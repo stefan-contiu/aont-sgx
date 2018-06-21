@@ -104,4 +104,4 @@ if __name__ == '__main__':
         t = parse_arg(sys.argv[i])
         HDRIVES[i - 2] = t
 
-    #app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0')
