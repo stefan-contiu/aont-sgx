@@ -104,6 +104,9 @@ void benchmark_write(int reps=10)
     */
 }
 
+void longhaul_test()
+{}
+
 void feed_rekey(int block_size)
 {
     // read input file
