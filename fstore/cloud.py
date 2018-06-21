@@ -5,6 +5,8 @@ import hashlib
 import paramiko
 import binascii
 import os
+import sys
+import re
 
 #data = 'This is arbitrary data\n'.encode('ascii')
 #put_file('192.168.1.116', 'nuc', 'msstream', '/hdd', 'file.bin', data)
@@ -13,38 +15,28 @@ import os
 REDIS_METADATA_SERVER_NAME = "192.168.1.112"
 REDIS_METADATA_SERVER_PORT = "6379"
 
+pwd = "msstream"
+dirname = "/hdd"
+
 HDRIVES = {}
-HDRIVES[0] = ["192.168.1.118", "nuc", "msstream", "/hdd", "nuc11"]       # NUC11
-HDRIVES[1] = ["192.168.1.116", "nuc", "msstream", "/hdd", "nuc12"]       # NUC12
-HDRIVES[2] = ["192.168.1.114", "nuc", "msstream", "/hdd", "nuc13"]       # NUC13
-HDRIVES[3] = ["192.168.1.106", "nuc", "msstream", "/hdd", "nuc14"]       # NUC14
-HDRIVES[4] = ["192.168.1.102", "nuc17", "msstream", "/hdd", "nuc17"]     # NUC17
-HDRIVES[5] = ["192.168.1.103", "nuc19", "msstream", "/hdd", "nuc19"]     # NUC19
+#HDRIVES[0] = ["192.168.1.118", "nuc", "msstream", "/hdd", "nuc11"]       # NUC11
+#HDRIVES[1] = ["192.168.1.116", "nuc", "msstream", "/hdd", "nuc12"]       # NUC12
+#HDRIVES[2] = ["192.168.1.114", "nuc", "msstream", "/hdd", "nuc13"]       # NUC13
+#HDRIVES[3] = ["192.168.1.106", "nuc", "msstream", "/hdd", "nuc14"]       # NUC14
+#HDRIVES[4] = ["192.168.1.102", "nuc17", "msstream", "/hdd", "nuc17"]     # NUC17
+#HDRIVES[5] = ["192.168.1.103", "nuc19", "msstream", "/hdd", "nuc19"]     # NUC19
 
 app = Flask(__name__)
 r = redis.StrictRedis(host=REDIS_METADATA_SERVER_NAME, port=REDIS_METADATA_SERVER_PORT, db=0)
 
-def put_file(machinename, username, password, dirname, filename, data):
+def put_file(machinename, username, filename, data):
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(machinename, username=username, password=password)
+    ssh.connect(machinename, username=username, password=pwd)
     sftp = ssh.open_sftp()
     f = sftp.open(dirname + '/' + filename, 'w')
     f.write(data)
     f.close()
-    ssh.close()
-
-def clear_share(m, u, p, d):
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(m, username=u, password=p)
-    sftp = ssh.open_sftp()
-
-    filesInRemoteArtifacts = sftp.listdir(path=d)
-    for file in filesInRemoteArtifacts:
-        sftp.remove(os.path.join(d, file))
-
-    sftp.close()
     ssh.close()
 
 @app.route('/')
@@ -72,7 +64,7 @@ def post_block(filename):
     i = v % N
 
     # save to drive
-    put_file(HDRIVES[i][0], HDRIVES[i][1], HDRIVES[i][2], HDRIVES[i][3], filename, data)
+    put_file(HDRIVES[i][0], HDRIVES[i][1], filename, data)
 
     # save to redis the worker name
     r.set(short_file_name, HDRIVES[i][4])
@@ -98,11 +90,18 @@ def get_block(filename):
     input_file.close()
     return data
 
+def parse_arg(s):
+    l = re.split(':|@', s)
+    return [l[2], l[1], pwd, dirname, l[0]]
+
 if __name__ == '__main__':
 
-    print("Cleaning shares ...")
-    for k in HDRIVES:
-        print("Clearning", HDRIVES[k][0])
-        clear_share(HDRIVES[k][0], HDRIVES[k][1], HDRIVES[k][2], HDRIVES[k][3])
+    # first arg is metadata server
+    REDIS_METADATA_SERVER_NAME = sys.argv[1]
 
-    app.run(debug=True, host='0.0.0.0')
+    # the rest are storages
+    for i in range(2, len(sys.argv)):
+        t = parse_arg(sys.argv[i])
+        HDRIVES[i - 2] = t
+
+    #app.run(debug=True, host='0.0.0.0')
