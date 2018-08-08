@@ -98,7 +98,7 @@ std::pair<double, double> write_file(
     // generate a random AES key : FK
     unsigned char* FK = gen_random_bytestream(32);
     unsigned char* SK = gen_random_bytestream(32);
-    unsigned char* iv = gen_random_bytestream(32);
+    unsigned char* iv = (unsigned char*)"01234567890123456789012345678901";
     //printf("enc FK : "); print_hex(FK, 32);
     //printf("SK : "); print_hex(SK, 32);
 

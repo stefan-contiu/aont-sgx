@@ -20,6 +20,8 @@
 //#include <hiredis.h>
 #include <random>
 
+#include "cass.h"
+
 std::vector<int> block_sizes{1024, 4 * 1024, 256 * 1024, 512 * 1024, 1024*1024, 2 * 1024*1024, 4 * 1024 * 1024};
 
 void benchmark_write(int reps=10)
@@ -222,9 +224,20 @@ int storage_test()
     printf("READ  : %f\n", time_spent);
 }
 
+int cassandra_functional_test()
+{
+    Cassandra::Init();
+    if (functional_tests(64 * 1024, 3) != 0)
+    {
+        printf("Execution stopped. Functional tests failed.\n");
+        return -1;
+    }
+    Cassandra::Bye();
+}
 
 int main(int argc, char **argv)
 {
+    cassandra_functional_test();
     //RedisCloud::Init();
     //RedisCloud::FlushAll();
 
@@ -233,18 +246,11 @@ int main(int argc, char **argv)
 
     //benchmark_aes();
     //benchmark_write();
-/*
-    if (functional_tests(64 * 1024, 3) != 0)
-    {
-        printf("Execution stopped. Functional tests failed.\n");
-        return -1;
-    }
 
     //RedisCloud::FlushAll();
 
-    return 0;
-*/
 
+/*
     std::string file_prefix = "";
     int files_count = 10;
     if (argc == 3)
@@ -259,9 +265,10 @@ int main(int argc, char **argv)
         1 * 1024 * 1024, // with block sizes of 1 MB
         1, // and with 1 se blocks/file
         file_prefix);
-
+*/
     //benchmark_write();
     //storage_test();
 
     //RedisCloud::Bye();
+
 }

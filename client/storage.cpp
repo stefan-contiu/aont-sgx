@@ -2,14 +2,20 @@
 #include "rest.h"
 #include <fstream>
 #include <experimental/filesystem>
+#include "cass.h"
 namespace fs = std::experimental::filesystem::v1;
 
 static std::string path = "/media/stefan/Windows/PHD/aont/";
 
 //#include "redis.h"
 
+
+
 void write_to_storage(std::string key, unsigned char* value, size_t size)
 {
+    Cassandra::insert_block((char*)key.c_str(), value, size);
+    return;
+/*
     rest_write_block(key, value, size);
     return;
 
@@ -21,10 +27,13 @@ void write_to_storage(std::string key, unsigned char* value, size_t size)
     std::ofstream s(full_key_name);
     s.write(reinterpret_cast<const char*>(value), size);
     s.close();
+*/
 }
 
 void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
 {
+    Cassandra::get_block((char*)key.c_str(), value, p_size);
+/*
     rest_read_block(key, value, p_size);
     return;
 
@@ -40,6 +49,7 @@ void read_from_storage(std::string key, unsigned char** value, size_t* p_size)
     s.read(reinterpret_cast<char*>(*value), file_size);
     (*p_size) = file_size;
     s.close();
+*/
 }
 
 void get_all_metadata_keys(std::vector<std::string>& metadata_keys)

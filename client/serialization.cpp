@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "cass.h"
 
 void long_to_byte_array(unsigned long n, unsigned char* bytes, size_t bytes_size)
 {
@@ -153,6 +154,9 @@ void serialize_metadata_to_redis(
     unsigned char* tail_sgx, //256 bytes
     unsigned char* iv) // 32 bytes{
 {
+    Cassandra::insert_meta(file_name, blocks_count, se_blocks_count,
+	tail_fk, tail_sk, tails_se, tail_sgx);
+/*
     unsigned char* m;
     size_t m_size;
 
@@ -168,6 +172,7 @@ void serialize_metadata_to_redis(
         iv);
 
     rest_write_metadata(file_name, m, m_size);
+*/
 }
 
 void deserialize_metadata_file(
@@ -180,6 +185,10 @@ void deserialize_metadata_file(
     unsigned char** tail_sgx,
     unsigned char** iv)
 {
+    Cassandra::get_meta(file_name, p_blocks_count, se_blocks_count,
+	tail_fk, tail_sk, tails_se, tail_sgx);
+    memcpy(*iv, "01234567890123456789012345678901", 32);
+/*
     unsigned char* m;
     size_t file_size;
 
@@ -196,4 +205,5 @@ void deserialize_metadata_file(
         tails_se,
         tail_sgx,
         iv);
+*/
 }
