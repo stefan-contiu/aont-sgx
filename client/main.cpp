@@ -138,13 +138,16 @@ int functional_tests(int block_size_in_bytes, int se_count)
     buffer << t.rdbuf();
     std::string s = buffer.str();
     t.close();
+    printf("Loaded test file of size %d \n", s.size());
 
     std::string file_name = "file_" + std::to_string(block_size_in_bytes);
 
     unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
 
+    printf("Write file ...\n");
     write_file((char*)file_name.c_str(), s,
         old_gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
+    printf("File written!\n");
 
     std::string response;
     read_file(file_name, response, old_gk, block_size_in_bytes);
@@ -227,6 +230,7 @@ int storage_test()
 int cassandra_functional_test()
 {
     Cassandra::Init();
+    Cassandra::ClearDb();
     if (functional_tests(64 * 1024, 3) != 0)
     {
         printf("Execution stopped. Functional tests failed.\n");

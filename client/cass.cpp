@@ -7,6 +7,7 @@ CassFuture* Cassandra::connect_future;
 void Cassandra::insert_meta(char* file_name, int blocks_count, int se_blocks_count,
 	unsigned char* tail_fk, unsigned char* tail_sk, unsigned char* tails_se[32], unsigned char* tail_sgx)
 {
+    //printf("Writing meta...\n");
     CassStatement* statement
         = cass_statement_new("INSERT INTO meta (file_name, blocks_count, se_blocks_count, tail_fk, tail_sk, tail_se, tail_sgx) VALUES (?, ?, ?, ?, ?, ?, ?)", 7);
 
@@ -24,6 +25,9 @@ void Cassandra::insert_meta(char* file_name, int blocks_count, int se_blocks_cou
     cass_statement_bind_bytes(statement, 6, (const cass_byte_t*) tail_sgx, 32);
 
     CassFuture* query_future = cass_session_execute(session, statement);
+    CassError rc = cass_future_error_code(query_future);
+    //printf("Query result: %s\n", cass_error_desc(rc));
+
     cass_statement_free(statement);
     cass_future_free(query_future);
     free(all_se);
@@ -45,7 +49,8 @@ void Cassandra::update_meta(char* file_name, unsigned char* tail_sk)
 void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_count,
         unsigned char** tail_fk, unsigned char** tail_sk, unsigned char* tails_se[32], unsigned char** tail_sgx)
 {
-CassStatement* statement = cass_statement_new("SELECT blocks_count, se_blocks_count, tail_fk, tail_sk, tail_se, tail_sgx FROM meta WHERE file_name=?", 1);
+    //printf("Reading meta... \n");
+    CassStatement* statement = cass_statement_new("SELECT blocks_count, se_blocks_count, tail_fk, tail_sk, tail_se, tail_sgx FROM meta WHERE file_name=?", 1);
     cass_statement_bind_string(statement, 0, file_name);
     CassFuture* result_future = cass_session_execute(session, statement);
     if(cass_future_error_code(result_future) == CASS_OK) 
@@ -122,6 +127,7 @@ void Cassandra::update_block(char* block_name, unsigned char* data, size_t size)
 
 void Cassandra::get_block(char* block_name, unsigned char** data, size_t* data_size)
 {
+    //printf("Reading block ...\n");
     CassStatement* statement = cass_statement_new("SELECT size, data FROM blocks WHERE block_name=?", 1);
     cass_statement_bind_string(statement, 0, block_name);
     CassFuture* result_future = cass_session_execute(session, statement);

@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define CASSANDRA_CONTACTS "192.168.1.115"
+#define CASSANDRA_CONTACTS "192.168.1.115,192.168.1.116"
 
 class Cassandra
 {
@@ -23,6 +23,23 @@ public:
   		session = cass_session_new();
   		cass_cluster_set_contact_points(cluster, CASSANDRA_CONTACTS);
   		connect_future = cass_session_connect_keyspace(session, cluster, "aont");
+		CassError rc = cass_future_error_code(connect_future);
+		printf("Connect result: %s\n", cass_error_desc(rc));
+	}
+
+	static void ClearDb()
+	{
+		CassStatement* statement = cass_statement_new("TRUNCATE meta", 0);
+    		CassFuture* query_future = cass_session_execute(session, statement);
+    		CassError rc = cass_future_error_code(query_future);
+
+		statement = cass_statement_new("TRUNCATE blocks", 0);
+		query_future = cass_session_execute(session, statement);
+		rc = cass_future_error_code(query_future);
+
+		cass_statement_free(statement);
+    		cass_future_free(query_future);
+
 	}
 
 	static void Bye()

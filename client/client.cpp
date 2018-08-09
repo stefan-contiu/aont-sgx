@@ -488,7 +488,7 @@ std::pair<double, double> read_file(
 
     free(enc_tail_fk);
     free(enc_tail_sk);
-    free(iv);
+//    free(iv);
 //    free(enc_oeb_index);
     free(tail_fk);
     free(tail_sk);
