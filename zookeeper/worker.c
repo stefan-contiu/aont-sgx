@@ -1,4 +1,4 @@
-#include <zookeeper.h>
+#include "zookeeper.h"
 #include <proto.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,6 +23,9 @@ int write(int _Filehandle, const void * _Buf, unsigned int _MaxCharCount);
 #include <assert.h>
 
 #define _LL_CAST_ (long long)
+
+
+int WORKER_ID = 0;
 
 int verbose = 0;
 char* hostPort;
@@ -137,11 +140,8 @@ void get_completion(int rc, const char *value, int value_len,
 	char v[value_len];
 	memcpy(v, value, value_len);
 
-	printf("VALUE : %s\n", v);
+	printf("GOT VALUE : %s\n", v);
 	free((void*)data);
-
-	sleep(5);
-	test_set();
 }
 
 void test_get()
@@ -165,8 +165,82 @@ void test_set()
                     strdup(line));
 }
 
+void create_completion(int rc,  const char * val, const void * data)
+{
+	printf("Create callback called!\n");
+}
+
+void create_znode(char* name)
+{
+        char* ptr = "stefan";
+	zoo_acreate(zh, name, ptr, strlen(ptr), &ZOO_OPEN_ACL_UNSAFE, 0, create_completion, strdup(name));
+}
+
+void tasks_watcher (zhandle_t *zh,
+                    int type,
+                    int state,
+                    const char *path,
+                    void *watcherCtx) {
+    printf("Tasks watcher triggered %s %d", path, state);
+/*    if( type == ZOO_CHILD_EVENT) {
+        assert( !strcmp(path, "/tasks") );
+        get_tasks();
+    } else {
+        LOG_INFO(("Watched event: %s", type2string(type)));
+    }
+    LOG_DEBUG(("Tasks watcher done"));
+*/
+}
+
+
+void process_task()
+{
+	// crop the file name : is after the last dash
+
+	// start a new thread
+	// in the thread :
+	//	re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
+	//	create status znode
+	//	delete assignment znode
+}
+
+void tasks_completion (int rc,
+                       const struct String_vector *strings,
+			const void *data) {
+	printf("TASKS COMPLETION\n");
+	if (rc == ZOK)
+	{
+		int i;
+ 		for( i = 0; i < strings->count; i++) {
+        		printf("RETREIVED task %s", (char *) strings->data[i]);
+		}
+	}
+}
+
+void watch_znode(char* name)
+{
+	zoo_awget_children(zh,
+                       name,
+                       tasks_watcher,
+                       NULL,
+                       tasks_completion,
+			NULL);
+}
 
 int main(int argc, char **argv) {
+
+
+	srand(time(NULL));
+	WORKER_ID = rand();
+
+	char assign_worker[32];
+	snprintf(assign_worker, 32, "/assign/worker-%x", WORKER_ID);
+	
+	char worker_worker[32];
+	snprintf(worker_worker, 32, "/workers/worker-%x", WORKER_ID);
+
+	printf("A : %s\nW : %s\n", assign_worker, worker_worker);
+
 #ifndef THREADED
     fd_set rfds, wfds, efds;
     int processed=0;
@@ -222,6 +296,9 @@ int main(int argc, char **argv) {
         return errno;
     }
 
+
+    int WORKER_WAKE_UP = 1;
+
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
     FD_ZERO(&efds);
@@ -259,8 +336,20 @@ int main(int argc, char **argv) {
             }
         }
 
-	test_get();
-	usleep(500 * 1000);
+	// once executed
+	if (WORKER_WAKE_UP)
+	{
+		WORKER_WAKE_UP = 0;
+		create_znode(assign_worker);
+		create_znode(worker_worker);
+	}
+
+	// sleep 100 miliseconds
+	usleep(800 * 1000);
+
+	// wath the tasks given by master
+	watch_znode(assign_worker);
+
         zookeeper_process(zh, events);
     }
 
