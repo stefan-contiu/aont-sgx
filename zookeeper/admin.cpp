@@ -7,6 +7,7 @@
 #include <set>
 #include <string>
 
+#include <omp.h>
 typedef struct String_vector zoo_string;
 
 #ifndef WIN32
@@ -27,6 +28,7 @@ int write(int _Filehandle, const void * _Buf, unsigned int _MaxCharCount);
 
 #define _LL_CAST_ (long long)
 
+std::set<std::string> status_done;
 
 int WORKER_ID = 0;
 
@@ -195,6 +197,7 @@ void tasks_watcher (zhandle_t *zh,
 */
 }
 
+/*
 void delete_task_completion(int rc, const void *data) {
 	if (rc == ZOK)
 	{
@@ -204,6 +207,7 @@ void delete_task_completion(int rc, const void *data) {
 
 void delete_assignment(char* name)
 {
+    printf("ASSIGNMENT IS DELETED");
     char * tmp_path = strdup(name);
     zoo_adelete(zh,
                 tmp_path,
@@ -212,33 +216,19 @@ void delete_assignment(char* name)
 		(const void*) tmp_path);
 }
 
-std::set<std::string> on_going_tasks;
-
 void process_task(char* task_name)
 {
-
 	// crop the file name : is after the last dash
-	char *file_name = strchr(task_name, '-') + 1;
-	std::string f(file_name);
 
+	// start a new thread?
+	// re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
+	printf("Re-encryption of File Name : %s\n", task_name);
+	usleep(3 * 1000 * 1000);
 
-	bool on_going = on_going_tasks.find(f) != on_going_tasks.end();
-	if (!on_going)
-	{
-		on_going_tasks.insert(f);
-
-		printf("Re-encryption of File Name : %s\n", file_name);
-		// re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
-		usleep(1 * 1000 * 1000);
-
-		// create status znode, so the admin knows that the task is done
-		std::string s("/status/task-");
-		s.append(f);
-		create_znode((char*)s.c_str());	
-
-		// delete assignment znode, so that master does not re-assign the task
-		delete_assignment(task_name);
-	}
+	// create status znode, so the admin knows that the task is done
+	
+	// delete assignment znode, so that master does not re-assign the task
+	delete_assignment(name);
 }
 
 void tasks_completion (int rc,
@@ -248,7 +238,8 @@ void tasks_completion (int rc,
 	{
 		int i;
  		for( i = 0; i < strings->count; i++) {
-			process_task((char*) strings->data[i]);
+        		printf("RETREIVED task %s", (char *) strings->data[i]);
+			process_task();
 		}
 	}
 }
@@ -262,20 +253,62 @@ void watch_znode(char* name)
                        tasks_completion,
 			NULL);
 }
+*/
+
+int total_tasks = 0;
+void create_tasks()
+{
+	// TODO : query cassandra metadata and get all the file names
+
+	srand(time(NULL));
+	total_tasks = 100;
+	for(int i=0; i<total_tasks; i++)
+	{
+		char task_name[32];
+		int file_id = rand();
+		snprintf(task_name, 32, "/tasks/task-file%x.dat", file_id);
+		printf("Creating task : %s\n", task_name);
+		create_znode(task_name);
+	}
+}
+
+
+
+void status_watcher (zhandle_t *zh,
+                    int type,
+                    int state,
+                    const char *path,
+                    void *watcherCtx) {
+}
+
+void status_completion (int rc,
+                       const struct String_vector *strings,
+                        const void *data) {
+        if (rc == ZOK)
+        {
+                int i;
+                for( i = 0; i < strings->count; i++) {
+			std::string s((char*) strings->data[i]);
+			status_done.insert(s);
+                }
+        }
+}
+
+
+int watch_tasks_status()
+{
+	char* status_znode = "/status";
+        zoo_awget_children(zh,
+                       status_znode,
+                       status_watcher,
+                       NULL,
+                       status_completion,
+                        NULL);
+	return 0;
+}
 
 int main(int argc, char **argv) {
 
-
-	srand(time(NULL));
-	WORKER_ID = rand();
-
-	char assign_worker[32];
-	snprintf(assign_worker, 32, "/assign/worker-%x", WORKER_ID);
-	
-	char worker_worker[32];
-	snprintf(worker_worker, 32, "/workers/worker-%x", WORKER_ID);
-
-	printf("A : %s\nW : %s\n", assign_worker, worker_worker);
 
 #ifndef THREADED
     fd_set rfds, wfds, efds;
@@ -332,8 +365,9 @@ int main(int argc, char **argv) {
         return errno;
     }
 
+	double startTime = omp_get_wtime();
 
-    int WORKER_WAKE_UP = 1;
+    int CLIENT_WAKE_UP = 1;
 
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
@@ -373,21 +407,30 @@ int main(int argc, char **argv) {
         }
 
 	// once executed
-	if (WORKER_WAKE_UP)
+	if (CLIENT_WAKE_UP)
 	{
-		WORKER_WAKE_UP = 0;
-		create_znode(assign_worker);
-		create_znode(worker_worker);
+		CLIENT_WAKE_UP = 0;
+		create_tasks();
 	}
 
 	// sleep 100 miliseconds
 	usleep(100 * 1000);
 
-	// wath the tasks given by master
-	watch_znode(assign_worker);
+	// wath the status of tasks reported by workers
+	printf("Checking the status of all tasks %d out of %d...\n", status_done.size(), total_tasks);
+	watch_tasks_status();
+	if (status_done.size() == total_tasks)
+	{
+		printf("TASKS WERE FINISHED !\n");
+		break;
+	}
 
         zookeeper_process(zh, events);
     }
+
+	double stopTime = omp_get_wtime();
+	double secsElapsed = stopTime - startTime;
+	printf("ADMIN time : %f\n", secsElapsed);
 
     if (to_send!=0)
         fprintf(stderr,"Recvd %d responses for %d requests sent\n",recvd,sent);

@@ -1,5 +1,5 @@
 worker:
 	g++  -I /usr/local/include/zookeeper/ -L /usr/local/lib/ worker.cpp -o worker.out -lzookeeper_st
 admin:
-	gcc  -I /usr/local/include/zookeeper/ -L /usr/local/lib/ admin.c -o admin.out -lzookeeper_st
+	g++  -I /usr/local/include/zookeeper/ -L /usr/local/lib/ admin.cpp -o admin.out -lzookeeper_st -fopenmp
 

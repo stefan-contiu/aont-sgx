@@ -1,3 +1,7 @@
+# kill any leftovers
+pkill worker.out
+pkill admin.out
+
 # CLEAR zookeeper DB
 /home/nuc17/stefan/zk/zookeeper-3.4.12/bin/zkCli.sh rmr /workers
 /home/nuc17/stefan/zk/zookeeper-3.4.12/bin/zkCli.sh rmr /status
