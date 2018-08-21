@@ -217,6 +217,14 @@ int storage_test()
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
     printf("WRITE : %f\n", time_spent);
+    Cassandra::Init();
+    Cassandra::ClearDb();
+    if (functional_tests(64 * 1024, 3) != 0)
+    {
+        printf("Execution stopped. Functional tests failed.\n");
+        return -1;
+    }
+    Cassandra::Bye();
 
     unsigned char* mm;
     size_t ss;
@@ -239,40 +247,35 @@ int cassandra_functional_test()
     Cassandra::Bye();
 }
 
+int write_many_files(int files_count, int file_size, int block_size_in_bytes, int se_count)
+{
+    	Cassandra::Init();
+    	Cassandra::ClearDb();
+
+	for(int i=0; i<files_count; i++)
+	{
+		printf("Writing file %d\n", i);
+		std::string file_name = "file" + std::to_string(i) + ".dat";
+    		unsigned char* gk = (unsigned char*) "12345678901234567890123456789012";
+		unsigned char* buffer = (unsigned char*) malloc(file_size);
+		std::string s((char*)buffer, file_size);
+
+		write_file((char*)file_name.c_str(), s, gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
+		free(buffer);
+	}
+
+	Cassandra::Bye();
+}
+
 int main(int argc, char **argv)
 {
-    cassandra_functional_test();
-    //RedisCloud::Init();
-    //RedisCloud::FlushAll();
+	if (argc > 1)
+	{
+		if (strncmp(argv[1], "-generate", strlen(argv[1])) == 0)
+		{
+			write_many_files(10, 32 * 1024 * 1024, 4 * 1024 * 1024, 1);
+		}
+	}
+    //cassandra_functional_test();
+} 
 
-    //for(int i=1; i<block_sizes.size(); i++)
-    //    feed_rekey(block_sizes[i]);
-
-    //benchmark_aes();
-    //benchmark_write();
-
-    //RedisCloud::FlushAll();
-
-
-/*
-    std::string file_prefix = "";
-    int files_count = 10;
-    if (argc == 3)
-    {
-        file_prefix.assign(argv[1], strlen(argv[1]));
-        files_count = atoi(argv[2]);
-    }
-    std::vector<int> test_distribution({4, 3, 4, 7, 1});
-    write_files_according_to_distribution(
-        files_count, test_distribution, // write files
-        4, 12,  // with sizes between 12 MB and 1 GB
-        1 * 1024 * 1024, // with block sizes of 1 MB
-        1, // and with 1 se blocks/file
-        file_prefix);
-*/
-    //benchmark_write();
-    //storage_test();
-
-    //RedisCloud::Bye();
-
-}
