@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <set>
+#include <string>
+
 typedef struct String_vector zoo_string;
 
 #ifndef WIN32
@@ -192,27 +195,60 @@ void tasks_watcher (zhandle_t *zh,
 */
 }
 
+void delete_task_completion(int rc, const void *data) {
+	if (rc == ZOK)
+	{
+		free((char *) data);
+	}
+}
 
-void process_task()
+void delete_assignment(char* name)
 {
-	// crop the file name : is after the last dash
+    char * tmp_path = strdup(name);
+    zoo_adelete(zh,
+                tmp_path,
+                -1,
+                delete_task_completion,
+		(const void*) tmp_path);
+}
 
-	// start a new thread
-	// in the thread :
-	//	re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
-	//	create status znode
-	//	delete assignment znode
+std::set<std::string> on_going_tasks;
+
+void process_task(char* task_name)
+{
+
+	// crop the file name : is after the last dash
+	char *file_name = strchr(task_name, '-') + 1;
+	std::string f(file_name);
+
+
+	bool on_going = on_going_tasks.find(f) != on_going_tasks.end();
+	if (!on_going)
+	{
+		on_going_tasks.insert(f);
+
+		printf("Re-encryption of File Name : %s\n", file_name);
+		// re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
+		usleep(1 * 1000 * 1000);
+
+		// create status znode, so the admin knows that the task is done
+		std::string s("/status/task-");
+		s.append(f);
+		create_znode(f.c_str());	
+
+		// delete assignment znode, so that master does not re-assign the task
+		delete_assignment(task_name);
+	}
 }
 
 void tasks_completion (int rc,
                        const struct String_vector *strings,
 			const void *data) {
-	printf("TASKS COMPLETION\n");
 	if (rc == ZOK)
 	{
 		int i;
  		for( i = 0; i < strings->count; i++) {
-        		printf("RETREIVED task %s", (char *) strings->data[i]);
+			process_task((char*) strings->data[i]);
 		}
 	}
 }
@@ -345,7 +381,7 @@ int main(int argc, char **argv) {
 	}
 
 	// sleep 100 miliseconds
-	usleep(800 * 1000);
+	usleep(100 * 1000);
 
 	// wath the tasks given by master
 	watch_znode(assign_worker);
