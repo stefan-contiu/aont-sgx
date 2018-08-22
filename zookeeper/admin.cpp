@@ -8,6 +8,9 @@
 #include <string>
 
 #include <omp.h>
+
+#include "cass.h"
+
 typedef struct String_vector zoo_string;
 
 #ifndef WIN32
@@ -259,17 +262,22 @@ int total_tasks = 0;
 void create_tasks()
 {
 	// TODO : query cassandra metadata and get all the file names
+	Cassandra::Init();
+	std::vector<std::string> f = Cassandra::get_all_files();
+	printf("Found %d files in DB.\n", f.size());
 
 	srand(time(NULL));
-	total_tasks = 100;
+	total_tasks = f.size();
 	for(int i=0; i<total_tasks; i++)
 	{
 		char task_name[32];
-		int file_id = rand();
-		snprintf(task_name, 32, "/tasks/task-file%x.dat", file_id);
+		printf("Found file : %s\n", f[i].c_str());
+		snprintf(task_name, 32, "/tasks/task-%s", f[i].c_str());
 		printf("Creating task : %s\n", task_name);
 		create_znode(task_name);
 	}
+
+	Cassandra::Bye();
 }
 
 

@@ -254,12 +254,12 @@ int write_many_files(int files_count, int file_size, int block_size_in_bytes, in
 
 	for(int i=0; i<files_count; i++)
 	{
-		printf("Writing file %d\n", i);
 		std::string file_name = "file" + std::to_string(i) + ".dat";
     		unsigned char* gk = (unsigned char*) "12345678901234567890123456789012";
 		unsigned char* buffer = (unsigned char*) malloc(file_size);
 		std::string s((char*)buffer, file_size);
 
+		printf("Writing file %s\n", (char*)file_name.c_str());
 		write_file((char*)file_name.c_str(), s, gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
 		free(buffer);
 	}

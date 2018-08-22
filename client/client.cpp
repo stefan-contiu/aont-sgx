@@ -237,10 +237,8 @@ std::pair<double, double> write_file(
     //printf("ENC IV : "); print_hex(iv, 32);
     //printf("DEC Tail FK : "); print_hex(enc_tail_fk, 32);
 
-    std::string meta_file_name = local_file_name + ".metadata";
-
     serialize_metadata_to_redis(
-        (char*) meta_file_name.c_str(),
+        (char*) local_file_name.c_str(),
         number_of_blocks,
         SE_BLOCKS_COUNT,
         enc_tail_fk, // 32 bytes
