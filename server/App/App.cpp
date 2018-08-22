@@ -242,32 +242,7 @@ int SGX_CDECL main(int argc, char *argv[])
         return -1;
     }
 
-    if (argc < 2)
-    {
-        printf("ERROR : please provide \"master woker1-name worker2-name ...\" or \"worker worker-name\" role.\n");
-        return -1;
-    }
-    else
-    {
-        if (strncmp(argv[1], "master", 6) == 0 || strncmp(argv[1], "full_aes_master", 15) == 0)
-        {
-            // parse the workers, pass them to the master
-            std::vector<std::string> workers;
-            for(int i=2; i<argc; i++)
-            {
-                std::string s(argv[i]);
-                workers.push_back(s);
-            }
-
-            int do_full_aes = (strncmp(argv[1], "full_aes_master", 15) == 0);
-            master_loop(workers, do_full_aes);
-        }
-        else if (strncmp(argv[1], "worker", 6) == 0)
-        {
-            worker_loop(argv[2]);
-        }
-    }
-
+    zk_worker_loop(argc, (char**)argv);
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);

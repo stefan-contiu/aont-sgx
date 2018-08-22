@@ -62,7 +62,8 @@ extern "C" {
 #endif
 
 void master_loop(std::vector<std::string> workers, int do_full_aes);
-void worker_loop(char* worker_name);
+
+int zk_worker_loop(int argc, char** argv);
 
 #if defined(__cplusplus)
 }

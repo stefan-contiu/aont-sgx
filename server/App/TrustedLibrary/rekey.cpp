@@ -544,12 +544,14 @@ void worker_execute_job(char* worker_name, char* params, size_t size)
     RedisCloud::Publish(worker_done_key, worker_done_value);
 }
 
-void worker_loop(char* worker_name)
+
+int zk_worker_loop(int c, char** a)
 {
     //
-    printf("WORKER %s> Started...\n", worker_name);
+    printf("WORKER> Started...\n");
 
     // subscribe to worker_name
-    RedisCloud::Init();
-    RedisCloud::Subscribe(worker_name);
+    //RedisCloud::Init();
+    //RedisCloud::Subscribe(worker_name);
 }
+

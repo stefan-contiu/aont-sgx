@@ -84,7 +84,7 @@ else
 endif
 
 App_Cpp_Files := App/App.cpp $(wildcard App/Edger8rSyntax/*.cpp) $(wildcard App/TrustedLibrary/*.cpp)
-App_Include_Paths := -IInclude -IApp -I$(SGX_SDK)/include -I$(HIREDIS)
+App_Include_Paths := -IInclude -IApp -I$(SGX_SDK)/include -I$(HIREDIS) -I/usr/local/include/zookeeper/
 
 App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
 
@@ -223,7 +223,7 @@ App/%.o: App/%.cpp
 	@echo "CXX  <=  $<"
 
 $(App_Name): App/Enclave_u.o $(App_Cpp_Objects) $(HIREDIS)/libhiredis.a $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_usgxssl.a
-	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L$(HIREDIS) -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core
+	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L$(HIREDIS) -L/usr/local/lib/ -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core -lzookeeper_st
 	@echo "LINK =>  $@"
 
 .config_$(Build_Mode)_$(SGX_ARCH):
