@@ -55,6 +55,15 @@ enclave {
         public void ecall_worker_re_key(
             [in, size=job_params_size] char* job_params,
             size_t job_params_size);
+
+	public void ecall_re_key(
+		[user_check] char* file_name, 
+		int blocks_count, 
+		int se_blocks_count,
+    		[user_check] unsigned char* tail_fk, 
+		[user_check] unsigned char* tail_sk, 
+		[user_check] unsigned char** tails_se, 
+		[user_check] unsigned char* tail_sgx);
     };
 
     untrusted {
@@ -63,14 +72,5 @@ enclave {
 
         void ocall_put_block([in, string] char* key,
             [user_check] unsigned char* content, int content_size);
-
-        int ocall_get_metadata([in, string] char* key,
-            [out] unsigned char **content, int s);
-
-        void ocall_put_metadata([in, string] char* key,
-            [in, size=content_size] unsigned char* content, int content_size);
-
-        int ocall_get_block_ex([in, string] char* key,
-            [in] unsigned char **content, int s);
     };
 };

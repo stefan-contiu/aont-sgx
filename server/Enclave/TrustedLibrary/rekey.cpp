@@ -29,8 +29,9 @@ void ecall_malloc_free(void)
     free(ptr);
 }
 
-//unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
-//unsigned char* new_gk = (unsigned char*) "00001111222233334444455556789012";
+unsigned char* iv = (unsigned char*) "01234567890123456789012345678901";
+unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
+unsigned char* new_gk = (unsigned char*) "00001111222233334444455556789012";
 
 void pack32(uint32_t val,uint8_t *dest)
 {
@@ -77,7 +78,7 @@ static inline void print_hex(unsigned char *h, int l)
     printf("\n");
 }
 
-
+/*
 void deserialize_metadata_stream(
     unsigned char* inputStream,
     int inputStreamSize,
@@ -176,7 +177,6 @@ void serialize_metadata_to_stream(
 
 void test_serialization()
 {
-    /*
     // serialize
     unsigned char* tail_fk = (unsigned char*) "12345678901234567890123456789012";
     unsigned char* tail_oeb = (unsigned char*) "XXX45678901234567890123456789YYY";
@@ -204,8 +204,8 @@ void test_serialization()
     printf("OBE B size   : %d vs %d\n", o_b2, b2);
     //print_hex(tail_fk, 32);
     //print_hex(d_tail_fk, 32);
-    */
 }
+*/
 
 static char rsaPrivateKey[]="-----BEGIN RSA PRIVATE KEY-----\n"\
 "MIIEowIBAAKCAQEAy8Dbv8prpJ/0kKhlGeJYozo2t60EG8L0561g13R29LvMR5hy\n"\
@@ -314,8 +314,48 @@ unsigned char* sgx_sha256(const unsigned char *d,
 }
 
 
+void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsigned char* tail_fk, unsigned char* tail_sk,
+                unsigned char** tails_se, unsigned char* tail_sgx)
+{
+	printf("HELLO from SGX !\n");
+	if (se_blocks_count == 0)
+	{
+		// TODO : perform a full re-key
+	}
+	else
+	{
+		// decrypt the SK by enclave key
+		unsigned char SK[32];
+    		rsa_decryption(tail_sgx, 256,
+        		rsaPrivateKey, strlen(rsaPrivateKey),
+        	SK);
+
+    		// decrypt the indexies of super encrypted blocks
+    		std::vector<int> se_blocks;
+    		for (int i=0; i<se_blocks_count; i++)
+    		{
+        		unsigned char se_index_bytes[32];
+        		sgx_aes_decrypt(tails_se[i], 32, SK, iv, se_index_bytes);
+        		unsigned long se_index = 0;
+        		byte_array_to_long(se_index_bytes, &se_index);
+        		se_blocks.push_back((int) se_index);
+			printf("SUPER encrypted INDEX : %d\n", se_index);
+    		}
+
+		// decrypt by rsa key the tail_sk -> SK
+		// decrypt the indexes of tails_se
+		// for each index:
+		// 	* ocall: load the block
+		//	* re-encrypt
+		//	* hash out of sk, hash in sk
+		//	* ocall: push the block
+		// return metadata
+	}
+}
+
 void full_aes_file_re_key(char* meta_name)
 {
+/*
     // mock the sealed group keys
     unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
     unsigned char* new_gk = (unsigned char*) "xxx45678901234567890123456789012";
@@ -373,12 +413,12 @@ void full_aes_file_re_key(char* meta_name)
     }
 
     // no need to push metadata
+*/
 }
 
 void file_re_key(char* meta_name)
 {
-    // deserialize slave request
-
+/*
     // mock the sealed group keys
     unsigned char* old_gk = (unsigned char*) "12345678901234567890123456789012";
     unsigned char* new_gk = (unsigned char*) "xxx45678901234567890123456789012";
@@ -442,12 +482,11 @@ void file_re_key(char* meta_name)
         blockName = blockName + "." + std::to_string(se_blocks[i]);
 
         // get the block
-        /*
-        int block_size = 0;
-        unsigned char* enc_block;
-        ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
-        print_hex(enc_block, 90);
-        */
+        //int block_size = 0;
+       // unsigned char* enc_block;
+        //ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
+        //print_hex(enc_block, 90);
+
         unsigned char* enc_block = (unsigned char*) malloc(1024 * 1024);
         int block_size;
         ocall_get_block_ex(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
@@ -504,10 +543,12 @@ void file_re_key(char* meta_name)
     // clean-up
     free(new_metadata);
     //free(raw_metadata);
+    */
 }
 
 void ecall_worker_re_key(char* job_params, size_t job_params_size)
 {
+/*
     int full_aes_rekey = 0;
     if (strncmp(job_params, "full_aes:", 9) == 0)
     {
@@ -532,6 +573,7 @@ void ecall_worker_re_key(char* job_params, size_t job_params_size)
         p = strtok(NULL, ";");
     }
     return;
+*/
 }
 
 /* ecall_sgx_cpuid:
@@ -539,6 +581,7 @@ void ecall_worker_re_key(char* job_params, size_t job_params_size)
  */
 void ecall_sgx_cpuid(int cpuinfo[4], int leaf)
 {
+/*
     test_serialization();
 
     printf("SGX STEFAN : hello !!!\n");
@@ -548,4 +591,5 @@ void ecall_sgx_cpuid(int cpuinfo[4], int leaf)
     sgx_status_t ret = sgx_cpuid(cpuinfo, leaf);
     if (ret != SGX_SUCCESS)
         abort();
+*/
 }
