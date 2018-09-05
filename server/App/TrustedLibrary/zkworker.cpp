@@ -1,3 +1,6 @@
+#include "../App.h"
+#include "Enclave_u.h"
+
 #include "zookeeper.h"
 #include <proto.h>
 #include <stdlib.h>
@@ -150,7 +153,7 @@ void get_completion(int rc, const char *value, int value_len,
 void test_get()
 {
 	int rc;
-	const char* line = "/lulu";
+	char* line = "/lulu";
         rc = zoo_aget(zh, line, 1, get_completion, strdup(line));
 }
 
@@ -162,8 +165,8 @@ void set_completion(int rc, const struct Stat *stat, const void *data)
 
 void test_set()
 {
-	const char* line = "/lulu";
-	const char* ptr = "ioanna";
+	char* line = "/lulu";
+	char* ptr = "ioanna";
         int rc = zoo_aset(zh, line, ptr, strlen(ptr), -1, set_completion,
                     strdup(line));
 }
@@ -175,7 +178,7 @@ void create_completion(int rc,  const char * val, const void * data)
 
 void create_znode(char* name)
 {
-        const char* ptr = "stefan";
+        char* ptr = "stefan";
 	zoo_acreate(zh, name, ptr, strlen(ptr), &ZOO_OPEN_ACL_UNSAFE, 0, create_completion, strdup(name));
 }
 
@@ -221,15 +224,15 @@ void process_task(char* task_name)
 	char *file_name = strchr(task_name, '-') + 1;
 	std::string f(file_name);
 
-
 	bool on_going = on_going_tasks.find(f) != on_going_tasks.end();
 	if (!on_going)
 	{
 		on_going_tasks.insert(f);
 
 		printf("Re-encryption of File Name : %s\n", file_name);
+		re_key(file_name);
 		// re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
-		usleep(1 * 1000 * 1000);
+		// usleep(1 * 1000 * 1000);
 
 		// create status znode, so the admin knows that the task is done
 		std::string s("/status/task-");
@@ -263,7 +266,7 @@ void watch_znode(char* name)
 			NULL);
 }
 
-int zk_worker_loop_tmp(int argc, char** argv)
+int zk_worker_loop(int argc, char** argv)
 {
 	srand(time(NULL));
 	WORKER_ID = rand();

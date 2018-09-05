@@ -41,6 +41,8 @@
 #include "sgx_error.h"       /* sgx_status_t */
 #include "sgx_eid.h"     /* sgx_enclave_id_t */
 
+#include "TrustedLibrary/cass.h"
+
 #include <vector>
 #include <string>
 
@@ -64,6 +66,8 @@ extern "C" {
 void master_loop(std::vector<std::string> workers, int do_full_aes);
 
 int zk_worker_loop(int argc, char** argv);
+
+void re_key(char* file_name);
 
 #if defined(__cplusplus)
 }

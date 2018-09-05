@@ -263,8 +263,7 @@ void watch_znode(char* name)
 			NULL);
 }
 
-int main(int argc, char **argv) {
-
+int worker_loop(int argc, char** argv)
 
 	srand(time(NULL));
 	WORKER_ID = rand();

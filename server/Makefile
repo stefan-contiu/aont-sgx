@@ -223,7 +223,7 @@ App/%.o: App/%.cpp
 	@echo "CXX  <=  $<"
 
 $(App_Name): App/Enclave_u.o $(App_Cpp_Objects) $(HIREDIS)/libhiredis.a $(SGXSSL_TRUSTED_LIB_PATH)/libsgx_usgxssl.a
-	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L$(HIREDIS) -L/usr/local/lib/ -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core -lzookeeper_st
+	@$(CXX) $^ -L$(SGXSSL_TRUSTED_LIB_PATH) -L$(HIREDIS) -L/usr/local/lib/ -o $@ $(App_Link_Flags) -lstdc++fs -levent -levent_core -lzookeeper_st -lcassandra
 	@echo "LINK =>  $@"
 
 .config_$(Build_Mode)_$(SGX_ARCH):

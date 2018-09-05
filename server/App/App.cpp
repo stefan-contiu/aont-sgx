@@ -40,6 +40,7 @@
 
 #include "sgx_urts.h"
 #include "App.h"
+#include "cass.h"
 #include "Enclave_u.h"
 
 /* Global EID shared by multiple threads */
@@ -242,7 +243,9 @@ int SGX_CDECL main(int argc, char *argv[])
         return -1;
     }
 
+    Cassandra::Init();
     zk_worker_loop(argc, (char**)argv);
+    Cassandra::Bye();
 
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);

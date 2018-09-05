@@ -272,7 +272,7 @@ void create_tasks()
 	{
 		char task_name[32];
 		printf("Found file : %s\n", f[i].c_str());
-		snprintf(task_name, 32, "/tasks/task-%s", f[i].c_str());
+		snprintf(task_name, 32, "/tasks/task-%s\0", f[i].c_str());
 		printf("Creating task : %s\n", task_name);
 		create_znode(task_name);
 	}
