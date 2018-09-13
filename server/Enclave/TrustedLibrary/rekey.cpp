@@ -290,10 +290,6 @@ void sgx_aes_decrypt(
     unsigned char* key, unsigned char* iv,
     unsigned char* plaintext)
 {
-//    printf("\n CIPHER : "); print_hex(ciphertext, 128);
-//    printf("\n KEY : "); print_hex(key, 32);
-//    printf("\n IV : "); print_hex(iv, 32);
-
     EVP_CIPHER_CTX *ctx;
     int len;
     int plaintext_len;
@@ -314,21 +310,48 @@ unsigned char* sgx_sha256(const unsigned char *d,
 }
 
 
+void full_re_key(char* file_name, int blocks_count)
+{
+	for (int i=0; i<blocks_count; i++)
+                {
+                        std::string blockName = std::string(file_name);
+                        blockName = blockName + "." + std::to_string(i);
+			printf("Block : %s\n", (char*) blockName.c_str());
+
+                        // max block size is 64 MB
+                        unsigned char* enc_block = (unsigned char*) malloc(4 * 1024 * 1024);
+                        int block_size;
+                        int g;
+                        ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
+
+                        // re-key the block
+                        unsigned char* dec_enc_block = (unsigned char*) malloc(block_size);
+                        sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+                        unsigned char* enc_enc_block = (unsigned char*) malloc(block_size);
+                        sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
+
+                        // upload block
+                        ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
+                        free(enc_block);
+                        free(dec_enc_block);
+                        free(enc_enc_block);
+                }
+
+}
+
 void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsigned char* tail_fk, unsigned char* tail_sk,
                 unsigned char** tails_se, unsigned char* tail_sgx)
 {
-	printf("HELLO from SGX !\n");
 	if (se_blocks_count == 0)
 	{
-		// TODO : perform a full re-key
+		full_re_key(file_name, blocks_count);
 	}
 	else
 	{
 		// decrypt the SK by enclave key
 		unsigned char SK[32];
     		rsa_decryption(tail_sgx, 256,
-        		rsaPrivateKey, strlen(rsaPrivateKey),
-        	SK);
+        		rsaPrivateKey, strlen(rsaPrivateKey), SK);
 
     		// decrypt the indexies of super encrypted blocks
     		std::vector<int> se_blocks;
@@ -336,20 +359,40 @@ void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsign
     		{
         		unsigned char se_index_bytes[32];
         		sgx_aes_decrypt(tails_se[i], 32, SK, iv, se_index_bytes);
+			print_hex(iv, 32);
+			print_hex(se_index_bytes, 32);
         		unsigned long se_index = 0;
         		byte_array_to_long(se_index_bytes, &se_index);
-        		se_blocks.push_back((int) se_index);
-			printf("SUPER encrypted INDEX : %d\n", se_index);
+
+        		//se_blocks.push_back((int) se_index);
+        		se_blocks.push_back(i);
     		}
 
-		// decrypt by rsa key the tail_sk -> SK
-		// decrypt the indexes of tails_se
-		// for each index:
-		// 	* ocall: load the block
-		//	* re-encrypt
-		//	* hash out of sk, hash in sk
-		//	* ocall: push the block
-		// return metadata
+		for (int i=0; i<se_blocks_count; i++)
+		{
+        		std::string blockName = std::string(file_name);
+		        blockName = blockName + "." + std::to_string(se_blocks[i]);
+
+			// max block size is 64 MB
+        		unsigned char* enc_block = (unsigned char*) malloc(4 * 1024 * 1024);
+		        int block_size;
+			int g;
+        		ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
+
+		        // re-key the block
+        		unsigned char* dec_enc_block = (unsigned char*) malloc(block_size);
+        		sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+        		unsigned char* enc_enc_block = (unsigned char*) malloc(block_size);
+        		sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
+
+			// upload block
+        		ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
+			free(enc_block);
+			free(dec_enc_block);
+			free(enc_enc_block);
+		}
+
+		// TODO : hash in, hash out of FK
 	}
 }
 
@@ -498,6 +541,16 @@ void file_re_key(char* meta_name)
             xor_into_array(tail_sk, enc_block_sha, 32);
         }
 
+        // re-key the block
+        unsigned char dec_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+        unsigned char enc_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
+        // re-key the block
+        unsigned char dec_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+        unsigned char enc_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
+        sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
         // re-key the block
         unsigned char dec_enc_block[block_size]; // = (unsigned char*) malloc(block_size);
         sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);

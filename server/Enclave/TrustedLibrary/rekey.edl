@@ -68,7 +68,7 @@ enclave {
 
     untrusted {
         int ocall_get_block([in, string] char* key,
-            [out] unsigned char **content, int s);
+            [user_check] unsigned char **content, int p_size);
 
         void ocall_put_block([in, string] char* key,
             [user_check] unsigned char* content, int content_size);

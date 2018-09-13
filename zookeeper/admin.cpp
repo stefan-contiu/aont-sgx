@@ -148,7 +148,7 @@ void get_completion(int rc, const char *value, int value_len,
 	char v[value_len];
 	memcpy(v, value, value_len);
 
-	printf("GOT VALUE : %s\n", v);
+	//printf("GOT VALUE : %s\n", v);
 	free((void*)data);
 }
 
@@ -161,7 +161,7 @@ void test_get()
 
 void set_completion(int rc, const struct Stat *stat, const void *data)
 {
-	printf("SET value callback succesfull.\n");
+	//printf("SET value callback succesfull.\n");
     	free((void*)data);
 }
 
@@ -175,7 +175,7 @@ void test_set()
 
 void create_completion(int rc,  const char * val, const void * data)
 {
-	printf("Create callback called!\n");
+	//printf("Create callback called!\n");
 }
 
 void create_znode(char* name)
@@ -264,16 +264,21 @@ void create_tasks()
 	// TODO : query cassandra metadata and get all the file names
 	Cassandra::Init();
 	std::vector<std::string> f = Cassandra::get_all_files();
-	printf("Found %d files in DB.\n", f.size());
+	//printf("Found %d files in DB.\n", f.size());
 
 	srand(time(NULL));
 	total_tasks = f.size();
 	for(int i=0; i<total_tasks; i++)
 	{
 		char task_name[32];
-		printf("Found file : %s\n", f[i].c_str());
-		snprintf(task_name, 32, "/tasks/task-%s\0", f[i].c_str());
-		printf("Creating task : %s\n", task_name);
+
+		std::size_t found = f[i].find(".dat");
+		
+		std::string s = f[i].substr(0, found + 4);
+		//printf("Found file : %s\n", s.c_str());
+
+		snprintf(task_name, 32, "/tasks/task-%s\0", s.c_str());
+		//printf("Creating task : %s\n", task_name);
 		create_znode(task_name);
 	}
 
@@ -425,11 +430,11 @@ int main(int argc, char **argv) {
 	usleep(100 * 1000);
 
 	// wath the status of tasks reported by workers
-	printf("Checking the status of all tasks %d out of %d...\n", status_done.size(), total_tasks);
+//	printf("Checking the status of all tasks %d out of %d...\n", status_done.size(), total_tasks);
 	watch_tasks_status();
 	if (status_done.size() == total_tasks)
 	{
-		printf("TASKS WERE FINISHED !\n");
+//		printf("TASKS WERE FINISHED !\n");
 		break;
 	}
 
@@ -438,7 +443,9 @@ int main(int argc, char **argv) {
 
 	double stopTime = omp_get_wtime();
 	double secsElapsed = stopTime - startTime;
-	printf("ADMIN time : %f\n", secsElapsed);
+//	printf("ADMIN time : %f\n", secsElapsed);
+	printf("%f", secsElapsed);
+
 
     if (to_send!=0)
         fprintf(stderr,"Recvd %d responses for %d requests sent\n",recvd,sent);

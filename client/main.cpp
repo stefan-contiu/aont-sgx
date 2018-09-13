@@ -273,7 +273,9 @@ int main(int argc, char **argv)
 	{
 		if (strncmp(argv[1], "-generate", strlen(argv[1])) == 0)
 		{
-			write_many_files(10, 32 * 1024 * 1024, 4 * 1024 * 1024, 1);
+			int se_count = std::stoi(argv[2]);
+			//printf("SE COUNT : %d\n", se_count);
+			write_many_files(20, 32 * 1024 * 1024, 4 * 1024 * 1024, se_count);
 		}
 	}
     //cassandra_functional_test();

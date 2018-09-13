@@ -244,7 +244,23 @@ int SGX_CDECL main(int argc, char *argv[])
     }
 
     Cassandra::Init();
+
     zk_worker_loop(argc, (char**)argv);
+    
+    // TODO : hack, force a test re-key
+    //re_key("file2.dat");
+
+    //unsigned char* d;
+    //size_t n;
+    //Cassandra::get_block("file1.dat.0", &d, &n);
+    
+    //unsigned char* enc_block; // = (unsigned char*) malloc(64 * 1024 * 1024);
+    //int block_size;
+    //int g;
+    //ocall_get_block("file1.dat.0", &enc_block, &block_size);
+    //free(enc_block);
+
+
     Cassandra::Bye();
 
     /* Destroy the enclave */
