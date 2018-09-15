@@ -5,30 +5,8 @@ echo Please add manually to file: SGX_SDK = /opt/intel/sgxsdk
 cd ../Linux
 pico sgx/buildenv.mk
 
+echo Please execute make all && sudo make install
 #make all
 #sudo make install
 
 
-#############################
-# Cassandra
-#sudo apt-get install libuv-dev
-git clone https://github.com/libuv/libuv.git
-cd libuv
-mkdir -p out/cmake ; cd out/cmake ; cmake -DBUILD_TESTING=ON ../..
-sudo make all
-sudo make install
-cd ..
-
-git pull https://github.com/datastax/cpp-driver.git
-cd cpp-driver
-cmake .
-make all
-sudo make install
-
-
-############################
-# ZooKeeper
-
-#git clone https://github.com/stefan-contiu/aont-sgx.git
-#cd aont-sgx/server
-#make SGX=1
