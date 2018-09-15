@@ -17,97 +17,15 @@
 
 #include <algorithm>
 
-//#include <hiredis.h>
 #include <random>
 
 #include "cass.h"
 
+#include <chrono> 
+using namespace std::chrono; 
+
+
 std::vector<int> block_sizes{1024, 4 * 1024, 256 * 1024, 512 * 1024, 1024*1024, 2 * 1024*1024, 4 * 1024 * 1024};
-
-void benchmark_write(int reps=10)
-{
-    /*
-    unsigned char* old_gk = gen_random_bytestream(32); //(unsigned char*) "12345678901234567890123456789012";
-    //std::vector<int> block_sizes{1024, 4 * 1024, 256 * 1024, 512 * 1024, 768*1024, 1024 * 1024, 2 * 1024 * 1024, 4*1024*1024};
-
-    //std::vector<int> block_sizes{1024 * 1024};
-
-    std::vector<int> read;
-
-    //write_file("file.txt", old_gk, rsaPublicKey, strlen(rsaPublicKey), block_sizes[4]);
-
-    // read input file
-    std::ifstream t("file16.txt"); //file64.txt
-    std::stringstream buffer;
-    buffer << t.rdbuf();
-    std::string s = buffer.str();
-
-    RedisCloud::FlushAll();
-    for(int i=0; i<block_sizes.size(); i++)
-    {
-        std::vector<double> write_total;
-        std::vector<double> write_m0;
-        std::vector<double> write_m1;
-
-        std::vector<double> read_total;
-        std::vector<double> read_storage;
-        std::vector<double> read_aes;
-
-        for(int r=0; r<reps; r++)
-        {
-            std::string file_name = "file_" + std::to_string(i) + "_" + std::to_string(r);
-            //std::string file_name = "file14.txt";
-
-            clock_t begin = clock();
-
-            std::pair<double, double> t = write_file_aes((char*)file_name.c_str(), s,
-                old_gk, rsaPublicKey, strlen(rsaPublicKey), block_sizes[i]);
-
-            clock_t end = clock();
-            double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-
-            clock_t rbegin = clock();
-            std::pair<double, double> tr = read_file_aes((char*)file_name.c_str(),
-                old_gk, "temp.dat", block_sizes[i]);
-            clock_t rend = clock();
-            double rtime_spent = (double)(rend - rbegin) / CLOCKS_PER_SEC;
-        //    printf("%f\n", rtime_spent);
-
-            write_total.push_back(time_spent);
-            write_m0.push_back(t.first);
-            write_m1.push_back(t.second);
-
-            read_total.push_back(rtime_spent);
-            read_storage.push_back(tr.first);
-            read_aes.push_back(tr.second);
-            RedisCloud::FlushAll();
-        }
-
-        std::sort(write_total.begin(), write_total.end(), std::greater<int>());
-        std::sort(write_m0.begin(), write_m0.end(), std::greater<int>());
-        std::sort(write_m1.begin(), write_m1.end(), std::greater<int>());
-
-        std::sort(read_total.begin(), read_total.end(), std::greater<int>());
-        std::sort(read_storage.begin(), read_storage.end(), std::greater<int>());
-        std::sort(read_aes.begin(), read_aes.end(), std::greater<int>());
-
-        printf("%f,%f,%f,", write_total[reps/2] - write_m0[reps/2] - write_m1[reps/2], write_m0[reps/2], write_m1[reps/2]);
-        printf("%f,%f,%f\n", read_total[reps/2] - read_storage[reps/2] - read_aes[reps/2], read_storage[reps/2], read_aes[reps/2]);
-
-        RedisCloud::FlushAll();
-
-        begin = clock();
-        read_file("file.txt", old_gk, "temp.dat", block_sizes[i]);
-        end = clock();
-        time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-        read.push_back(time_spent);
-        printf("%f\n", time_spent);
-    }
-    */
-}
-
-void longhaul_test()
-{}
 
 void feed_rekey(int block_size)
 {
@@ -138,7 +56,7 @@ int functional_tests(int block_size_in_bytes, int se_count)
     buffer << t.rdbuf();
     std::string s = buffer.str();
     t.close();
-    printf("Loaded test file of size %d \n", s.size());
+    printf("Loaded test file of size %d \n", (int)s.size());
 
     std::string file_name = "file_" + std::to_string(block_size_in_bytes);
 
@@ -259,8 +177,22 @@ int write_many_files(int files_count, int file_size, int block_size_in_bytes, in
 		unsigned char* buffer = (unsigned char*) malloc(file_size);
 		std::string s((char*)buffer, file_size);
 
-		printf("Writing file %s\n", (char*)file_name.c_str());
-		write_file((char*)file_name.c_str(), s, gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
+		// WRITE
+		auto t1 = std::chrono::high_resolution_clock::now();
+		std::pair<double, double> t;
+                t = write_file((char*)file_name.c_str(), s, gk, rsaPublicKey, strlen(rsaPublicKey), block_size_in_bytes, se_count);
+		auto t2 = std::chrono::high_resolution_clock::now();
+		auto tm = duration_cast<milliseconds>(t2 - t1).count();
+		printf("w,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, (long)t.first);
+
+		// READ
+		t1 = std::chrono::high_resolution_clock::now();
+    		std::string response;
+    		//t = read_file(file_name, response, gk, block_size_in_bytes);
+		t2 = std::chrono::high_resolution_clock::now();
+		tm = duration_cast<milliseconds>(t2 - t1).count();
+		printf("r,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, 0);// WARNING : (long)t.first);
+
 		free(buffer);
 	}
 
@@ -271,13 +203,20 @@ int main(int argc, char **argv)
 {
 	if (argc > 1)
 	{
-		if (strncmp(argv[1], "-generate", strlen(argv[1])) == 0)
+		if (strncmp(argv[1], "-micro", strlen(argv[1])) == 0)
 		{
-			int se_count = std::stoi(argv[2]);
-			//printf("SE COUNT : %d\n", se_count);
-			write_many_files(20, 32 * 1024 * 1024, 4 * 1024 * 1024, se_count);
+			int file_size_kb = std::stoi(argv[2]);
+			int block_size_kb = std::stoi(argv[3]);
+			int se_count = std::stoi(argv[4]);
+			write_many_files(5, file_size_kb * 1024, block_size_kb * 1024, se_count);
+		}
+                else {
+			printf("usage: -micro file_size_kb block_size_kb se_blocks_count\n");
 		}
 	}
-    //cassandra_functional_test();
-} 
+	else
+	{
+		cassandra_functional_test();
+	}
+}
 
