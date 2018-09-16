@@ -49,7 +49,6 @@ void Cassandra::update_meta(char* file_name, unsigned char* tail_sk)
 void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_count,
         unsigned char** tail_fk, unsigned char** tail_sk, unsigned char* tails_se[32], unsigned char** tail_sgx)
 {
-    //printf("Reading meta... \n");
     CassStatement* statement = cass_statement_new("SELECT blocks_count, se_blocks_count, tail_fk, tail_sk, tail_se, tail_sgx FROM meta WHERE file_name=?", 1);
     cass_statement_bind_string(statement, 0, file_name);
     CassFuture* result_future = cass_session_execute(session, statement);
@@ -66,16 +65,20 @@ void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_coun
 
              value = cass_row_get_column_by_name(row, "blocks_count");
              cass_value_get_int32(value, blocks_count);
+	     //printf("DEBUG cass BLOCSK COUNT %d\n", *blocks_count);
              value = cass_row_get_column_by_name(row, "se_blocks_count");
              cass_value_get_int32(value, se_blocks_count);
+	     //printf("DEBUG SE BLOCSK COUNT %d\n", *se_blocks_count);
              value = cass_row_get_column_by_name(row, "tail_fk");
              cass_value_get_bytes(value, &bytes, &size);
              *tail_fk = (unsigned char*) malloc(size);
              memcpy(*tail_fk, bytes, size);
+    	     //printf("tail_fk done\n");
              value = cass_row_get_column_by_name(row, "tail_sk");
              cass_value_get_bytes(value, &bytes, &size);
              *tail_sk = (unsigned char*) malloc(size);
              memcpy(*tail_sk, bytes, size);
+    	     //printf("tail_fk done\n");
 
              value = cass_row_get_column_by_name(row, "tail_se");
              cass_value_get_bytes(value, &bytes, &size);
@@ -86,14 +89,25 @@ void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_coun
                  memcpy(tails_se[i], bytes_se, 32);
                  bytes_se += 32;
              }
+    	     //printf("tails_se done\n");
 
              value = cass_row_get_column_by_name(row, "tail_sgx");
              cass_value_get_bytes(value, &bytes, &size);
              *tail_sgx = (unsigned char*) malloc(size);
              memcpy(*tail_sgx, bytes, size);
+             //printf("tail_sgx done\n");
+
          }
+	 else
+	 {
+              printf("ERROR : No metadata found !!!");
+	 }
          cass_result_free(result);
          cass_iterator_free(rows);
+    }
+    else
+    {
+        printf("CASS ERROR !!!\n");
     }
     cass_statement_free(statement);
 }

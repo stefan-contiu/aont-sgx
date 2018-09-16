@@ -140,9 +140,6 @@ std::pair<double, double> write_file(
         /**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
     }
 
-    double storage_time = 0;
-    double aes_time = 0;
-
     while(in_file)
     {
         std::string block_name = local_file_name + "." + std::to_string(current_block);
@@ -257,37 +254,14 @@ std::pair<double, double> write_file(
     return std::make_pair(crypto_time, 0);
 }
 
-std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK, std::string local_dest_name,
+std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK, int number_of_blocks,
     int BLOCK_SIZE_BYTES)
 {
-    /*
-    int number_of_blocks;
-    int enc_oeb_index_size;
-    unsigned char* enc_tail_fk;
-    unsigned char* enc_tail_bi;
-    unsigned char* enc_oeb_index;
-    unsigned char* iv;
-
-    double storage_time;
-    double aes_time;
-
-    clock_t begin = clock();
-
-    // read file metadata
-    std::string meta_file_name = file_name + ".metadata";
-    deserialize_metadata_file(
-        (char*) meta_file_name.c_str(),
-        &number_of_blocks,
-        &enc_oeb_index_size,
-        &enc_tail_fk, // 32 bytes
-        &enc_tail_bi, // 32 bytes
-        &enc_oeb_index, // enc_oeb_index_size bytes
-        &iv);
-    clock_t end = clock();
-    storage_time += (double)(end - begin) / CLOCKS_PER_SEC;
+    long crypto_time = 0;
+    unsigned char* iv = (unsigned char*) malloc(32);
+    memcpy(iv, "01234567890123456789012345678901", 32);
 
     // get all the blocks
-    //std::ofstream s(local_dest_name);
     std::stringstream s;
     for(int i=0; i<number_of_blocks; i++)
     {
@@ -295,23 +269,20 @@ std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK
         size_t block_size;
         std::string block_name = file_name + "." + std::to_string(i);
 
-        clock_t begin = clock();
         read_from_storage(block_name, &enc_block, &block_size);
-        clock_t end = clock();
-        storage_time += (double)(end - begin) / CLOCKS_PER_SEC;
 
         unsigned char* block = (unsigned char*) malloc(block_size);
-        clock_t _begin = clock();
+
+	/**/auto t1 = std::chrono::high_resolution_clock::now(); 
         sgx_aes_decrypt(enc_block, block_size, GK, iv, block);
-        clock_t _end = clock();
-        aes_time += (double)(_end - _begin) / CLOCKS_PER_SEC;
+	/**/auto t2 = std::chrono::high_resolution_clock::now();
+	/**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
 
         s.write(reinterpret_cast<const char*>(block), block_size);
     }
     //s.close();
 
-    return std::make_pair(storage_time, aes_time);
-    */
+    return std::make_pair(crypto_time, 0);
 }
 
 
@@ -329,13 +300,10 @@ std::pair<double, double> read_file(
     unsigned char* tail_sgx;    // will not be used by the reader
     unsigned char* iv;
 
-    double storage_time;
-    double aes_time;
-
-    clock_t begin = clock();
+    long crypto_time = 0;
 
     // read file metadata
-    std::string meta_file_name = key_name + ".metadata";
+    std::string meta_file_name = key_name;
     deserialize_metadata_file(
         (char*) meta_file_name.c_str(),
         &number_of_blocks,
@@ -345,6 +313,10 @@ std::pair<double, double> read_file(
         tails_se,
         &tail_sgx,
         &iv);
+
+    if (number_of_super_encrypted_blocks == 0)
+	return read_file_aes(meta_file_name, GK, number_of_blocks, BLOCK_SIZE_BYTES);
+
 
     //printf("[read] total blocks : %d, super encrypted blocks : %d\n",
     //    number_of_blocks, number_of_super_encrypted_blocks);
@@ -360,17 +332,19 @@ std::pair<double, double> read_file(
     // decrypt metadata by GK
     unsigned char* tail_fk = (unsigned char*) malloc(32);
     unsigned char* tail_sk = (unsigned char*) malloc(32);
+
+
+/**/auto t1 = std::chrono::high_resolution_clock::now(); 
     sgx_aes_decrypt(enc_tail_fk, 32, GK, iv, tail_fk);
     sgx_aes_decrypt(enc_tail_sk, 32, GK, iv, tail_sk);
+/**/auto t2 = std::chrono::high_resolution_clock::now();
+/**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
+
 
 //    printf("ENC GK : "); print_hex(GK, 32);
 //    printf("ENC IV : "); print_hex(iv, 32);
 
     //printf("DEC Tail FK : "); print_hex(tail_fk, 32);
-
-
-    clock_t end = clock();
-    storage_time += (double)(end - begin) / CLOCKS_PER_SEC;
 
     // first goal : discover SK, perform an AONT on tail_sk
     unsigned char* enc_block_sha = (unsigned char*) malloc(32);
@@ -390,19 +364,19 @@ std::pair<double, double> read_file(
 
         // read block from storage
         {
-            clock_t rbegin = clock();
             read_from_storage(block_name, &enc_block, &block_size);
-            clock_t rend = clock();
-            storage_time += (double)(rend - rbegin) / CLOCKS_PER_SEC;
         }
         //printf("[read] -> block %d downloaded\n", i);
 
         // get hash of encrypted block
         {
+	    /**/auto t1 = std::chrono::high_resolution_clock::now(); 
             sgx_sha256(enc_block, block_size, enc_block_sha);
             xor_into_array(aont_sk, enc_block_sha, 32);
             xor_into_array(all_hashes, enc_block_sha, 32);
             //print_hex(enc_block_sha, 32);
+	    /**/auto t2 = std::chrono::high_resolution_clock::now();
+	    /**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
 
             // cache block and hash
             unsigned char* b = (unsigned char*) malloc(block_size);
@@ -413,7 +387,6 @@ std::pair<double, double> read_file(
             blocks.push_back(std::make_tuple(b, block_size));
             hashes.push_back(std::make_tuple(h, 32));
             //printf("Added hash : "); print_hex(std::get<0>(hashes[hashes.size() - 1]), 32);
-    //    printf("Read Block %d\n", (int) block_size);
         }
     }
 
@@ -426,8 +399,12 @@ std::pair<double, double> read_file(
     for (int i=0; i<number_of_super_encrypted_blocks; i++)
     {
         unsigned char se_index_bytes[32];
+	/**/auto t1 = std::chrono::high_resolution_clock::now(); 
         sgx_aes_decrypt(tails_se[i], 32, SK, iv, se_index_bytes);
-        unsigned long se_index = 0;
+	/**/auto t2 = std::chrono::high_resolution_clock::now();
+	/**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
+        
+	unsigned long se_index = 0;
         byte_array_to_long(se_index_bytes, &se_index);
         //printf("[read] Super Encrypted Block Index : %d\n", (int)se_index);
         unsigned char dec_block_sha[32];
@@ -437,8 +414,13 @@ std::pair<double, double> read_file(
             unsigned char* enc_enc_block = std::get<0>(blocks[se_index]);
             size_t block_size = std::get<1>(blocks[se_index]);
             unsigned char* enc_block = (unsigned char*) malloc(block_size);
-            sgx_aes_decrypt(enc_enc_block, block_size, GK, iv, enc_block);
+        
+        /**/auto t1 = std::chrono::high_resolution_clock::now(); 
+ 	    sgx_aes_decrypt(enc_enc_block, block_size, GK, iv, enc_block);
             sgx_sha256(enc_block, block_size, dec_block_sha);
+        /**/auto t2 = std::chrono::high_resolution_clock::now();
+        /**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
+
 
             // reaplce the block in the cache
             std::get<0>(blocks[se_index]) = enc_block;
@@ -450,8 +432,11 @@ std::pair<double, double> read_file(
             //printf("Hash out : "); print_hex(hash_out, 32);
             //printf("Hash in  : "); print_hex(dec_block_sha, 32);
 
+        /**/auto t1 = std::chrono::high_resolution_clock::now(); 
             xor_into_array(all_hashes, hash_out, 32);
             xor_into_array(all_hashes, dec_block_sha, 32);
+        /**/auto t2 = std::chrono::high_resolution_clock::now();
+        /**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
         }
     }
 
@@ -470,10 +455,10 @@ std::pair<double, double> read_file(
         int b_size = std::get<1>(blocks[i]);
         unsigned char* block = (unsigned char*) malloc(b_size);
 
-        clock_t _begin = clock();
+        /**/auto t1 = std::chrono::high_resolution_clock::now(); 
         sgx_aes_decrypt(std::get<0>(blocks[i]), b_size, FK, iv, block);
-        clock_t _end = clock();
-        aes_time += (double)(_end - _begin) / CLOCKS_PER_SEC;
+        /**/auto t2 = std::chrono::high_resolution_clock::now();
+        /**/crypto_time += duration_cast<milliseconds>(t2 - t1).count();
 
         s.write(reinterpret_cast<const char*>(block), b_size);
     }
@@ -488,5 +473,5 @@ std::pair<double, double> read_file(
     free(enc_block_sha);
     free(aont_sk);
 
-    return std::make_pair(storage_time, aes_time);
+    return std::make_pair(crypto_time, 0);
 }

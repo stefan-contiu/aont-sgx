@@ -187,23 +187,8 @@ void deserialize_metadata_file(
 {
     Cassandra::get_meta(file_name, p_blocks_count, se_blocks_count,
 	tail_fk, tail_sk, tails_se, tail_sgx);
+
+    // hardcode the IV for timebeing
+    *iv = (unsigned char*) malloc(32);
     memcpy(*iv, "01234567890123456789012345678901", 32);
-/*
-    unsigned char* m;
-    size_t file_size;
-
-    rest_read_metadata(file_name, &m, &file_size);
-    //RedisCloud::GetBinary(file_name, &m, &file_size);
-
-    deserialize_metadata_stream(
-        m,
-        file_size,
-        p_blocks_count,
-        se_blocks_count,
-        tail_fk,
-        tail_sk,
-        tails_se,
-        tail_sgx,
-        iv);
-*/
 }

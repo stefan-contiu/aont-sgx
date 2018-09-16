@@ -188,10 +188,10 @@ int write_many_files(int files_count, int file_size, int block_size_in_bytes, in
 		// READ
 		t1 = std::chrono::high_resolution_clock::now();
     		std::string response;
-    		//t = read_file(file_name, response, gk, block_size_in_bytes);
+    		t = read_file(file_name, response, gk, block_size_in_bytes);
 		t2 = std::chrono::high_resolution_clock::now();
 		tm = duration_cast<milliseconds>(t2 - t1).count();
-		printf("r,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, 0);// WARNING : (long)t.first);
+		printf("r,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, (long)t.first);
 
 		free(buffer);
 	}

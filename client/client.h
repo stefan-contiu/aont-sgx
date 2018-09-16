@@ -61,7 +61,7 @@ std::pair<double, double> write_file_aes(
     unsigned char* GK, char* epk, size_t epk_size
     ,int BLOCK_SIZE_BYTES);
 
-std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK, std::string local_dest_name,
+std::pair<double, double> read_file_aes(std::string file_name, unsigned char* GK, int number_of_blocks,
     int BLOCK_SIZE_BYTES);
 
 
