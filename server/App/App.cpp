@@ -43,6 +43,9 @@
 #include "cass.h"
 #include "Enclave_u.h"
 
+#include <chrono>
+using namespace std::chrono;
+
 /* Global EID shared by multiple threads */
 sgx_enclave_id_t global_eid = 0;
 
@@ -245,7 +248,28 @@ int SGX_CDECL main(int argc, char *argv[])
 
     Cassandra::Init();
 
-    zk_worker_loop(argc, (char**)argv);
+    if (argc == 1)
+    {
+	// microbenchmarks
+	for (int i=0; i<5; i++)
+	{
+		std::string s("file");
+		s.append(std::to_string(i));
+		s.append(".dat");
+
+		time_outside_sgx = 0;
+        	/**/auto t1 = std::chrono::high_resolution_clock::now();
+		time_outside_sgx = re_key((char*)s.c_str());
+        	/**/auto t2 = std::chrono::high_resolution_clock::now(); 
+        	/**/long total_time = duration_cast<milliseconds>(t2 - t1).count();
+		printf("z,,,%ld,%ld\n", total_time, total_time - time_outside_sgx);
+	}
+    }
+    else
+    {
+	// normal functioning
+	zk_worker_loop(argc, (char**)argv);
+    }
     
     // TODO : hack, force a test re-key
     //re_key("file2.dat");
@@ -266,7 +290,7 @@ int SGX_CDECL main(int argc, char *argv[])
     /* Destroy the enclave */
     sgx_destroy_enclave(global_eid);
 
-    printf("Info: SampleEnclave successfully returned.\n");
+//    printf("Info: SampleEnclave successfully returned.\n");
 
     return 0;
 }

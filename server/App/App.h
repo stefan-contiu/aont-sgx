@@ -59,6 +59,8 @@
 
 extern sgx_enclave_id_t global_eid;    /* global enclave id */
 
+static long time_outside_sgx = 0;
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -67,7 +69,7 @@ void master_loop(std::vector<std::string> workers, int do_full_aes);
 
 int zk_worker_loop(int argc, char** argv);
 
-void re_key(char* file_name);
+long re_key(char* file_name);
 
 #if defined(__cplusplus)
 }

@@ -316,7 +316,7 @@ void full_re_key(char* file_name, int blocks_count)
                 {
                         std::string blockName = std::string(file_name);
                         blockName = blockName + "." + std::to_string(i);
-			printf("Block : %s\n", (char*) blockName.c_str());
+//			printf("Block : %s\n", (char*) blockName.c_str());
 
                         // max block size is 64 MB
                         unsigned char* enc_block = (unsigned char*) malloc(4 * 1024 * 1024);
@@ -359,8 +359,8 @@ void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsign
     		{
         		unsigned char se_index_bytes[32];
         		sgx_aes_decrypt(tails_se[i], 32, SK, iv, se_index_bytes);
-			print_hex(iv, 32);
-			print_hex(se_index_bytes, 32);
+//			print_hex(iv, 32);
+//			print_hex(se_index_bytes, 32);
         		unsigned long se_index = 0;
         		byte_array_to_long(se_index_bytes, &se_index);
 

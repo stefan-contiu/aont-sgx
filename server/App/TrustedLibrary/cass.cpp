@@ -89,7 +89,7 @@ void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_coun
 
              value = cass_row_get_column_by_name(row, "blocks_count");
              cass_value_get_int32(value, blocks_count);
-		printf("DEBUG cass BLOCSK COUNT %d\n", *blocks_count);
+		//printf("DEBUG cass BLOCSK COUNT %d\n", *blocks_count);
              value = cass_row_get_column_by_name(row, "se_blocks_count");
              cass_value_get_int32(value, se_blocks_count);
              value = cass_row_get_column_by_name(row, "tail_fk");
@@ -159,29 +159,29 @@ void Cassandra::update_block(char* block_name, unsigned char* data, size_t size)
 
 void Cassandra::get_block(char* block_name, unsigned char** data, size_t* data_size)
 {
-    printf("Reading block ...\n");
+//    printf("Reading block ...\n");
     CassStatement* statement = cass_statement_new("SELECT size, data FROM blocks WHERE block_name=?", 1);
     cass_statement_bind_string(statement, 0, block_name);
     CassFuture* result_future = cass_session_execute(session, statement);
-    printf("Reading block 1 ...\n");
+//    printf("Reading block 1 ...\n");
     if(cass_future_error_code(result_future) == CASS_OK) 
     {
         const CassResult* result = cass_future_get_result(result_future);
         CassIterator* rows = cass_iterator_from_result(result);
-    printf("Reading block 2 ...\n");
+  //  printf("Reading block 2 ...\n");
         if (cass_iterator_next(rows)) 
         {
              const CassRow* row = cass_iterator_get_row(rows);
-    printf("Reading block 3 ...\n");
+    //printf("Reading block 3 ...\n");
              
 const CassValue* value = cass_row_get_column_by_name(row, "data");
              const cass_byte_t* bytes;
              cass_value_get_bytes(value, &bytes, data_size);
              
-    printf("Reading block 4 ...\n");
+    //printf("Reading block 4 ...\n");
 
 *data = (unsigned char*) malloc(*data_size);
-    printf("Reading block 5 %d...\n", *data_size);
+    //printf("Reading block 5 %d...\n", *data_size);
     if (*data && bytes)
 {
              //memcpy(*data, bytes, 10); //(*data_size) / 10);
@@ -191,7 +191,7 @@ else
 {
    printf("Malloc did not succeed!");
 }
-    printf("Reading block 6 ...\n");
+    //printf("Reading block 6 ...\n");
 
          }
          cass_result_free(result);

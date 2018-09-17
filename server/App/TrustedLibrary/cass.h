@@ -27,7 +27,7 @@ public:
   		cass_cluster_set_contact_points(cluster, CASSANDRA_CONTACTS);
   		connect_future = cass_session_connect_keyspace(session, cluster, "aont");
 		CassError rc = cass_future_error_code(connect_future);
-		printf("Connect result: %s\n", cass_error_desc(rc));
+//		printf("Connect result: %s\n", cass_error_desc(rc));
 	}
 
 	static void ClearDb()
