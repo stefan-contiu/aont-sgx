@@ -166,6 +166,7 @@ int cassandra_functional_test()
 }
 
 int write_many_files(int files_count, int file_size, int block_size_in_bytes, int se_count,
+	std::string uid,
 	int do_read = 1)
 {
     	Cassandra::Init();
@@ -173,7 +174,7 @@ int write_many_files(int files_count, int file_size, int block_size_in_bytes, in
 
 	for(int i=0; i<files_count; i++)
 	{
-		std::string file_name = "file" + std::to_string(i) + ".dat";
+		std::string file_name = "file_" + uid + "_" + std::to_string(i) + ".dat";
     		unsigned char* gk = (unsigned char*) "12345678901234567890123456789012";
 		unsigned char* buffer = (unsigned char*) malloc(file_size);
 		std::string s((char*)buffer, file_size);
@@ -206,20 +207,21 @@ int main(int argc, char **argv)
 {
 	if (argc > 1)
 	{
-		int files_count = std::stoi(argv[2]);
-		int file_size_kb = std::stoi(argv[3]);
-		int block_size_kb = std::stoi(argv[4]);
-		int se_count = std::stoi(argv[5]);
+		std::string uid(argv[2]);
+		int files_count = std::stoi(argv[3]);
+		int file_size_kb = std::stoi(argv[4]);
+		int block_size_kb = std::stoi(argv[5]);
+		int se_count = std::stoi(argv[6]);
 
 		if (strncmp(argv[1], "-micro", strlen(argv[1])) == 0)
 		{
 			write_many_files(files_count, file_size_kb * 1024, 
-				block_size_kb * 1024, se_count);
+				block_size_kb * 1024, se_count, uid);
 		}
 		else if (strncmp(argv[1], "-macro", strlen(argv[1])) == 0)
 		{
 			write_many_files(files_count, file_size_kb * 1024, 
-				block_size_kb * 1024, se_count, 0);
+				block_size_kb * 1024, se_count, uid, 0);
 		}
                 else {
 			printf("usage: -micro file_size_kb block_size_kb se_blocks_count\n");
