@@ -17,3 +17,4 @@ cmake .
 make all
 sudo make install
 cd ..
+sudo cp /usr/local/lib/x86_64-linux-gnu/libcassandra.so* /usr/lib/x86_64-linux-gnu/
