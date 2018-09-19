@@ -165,7 +165,8 @@ int cassandra_functional_test()
     Cassandra::Bye();
 }
 
-int write_many_files(int files_count, int file_size, int block_size_in_bytes, int se_count)
+int write_many_files(int files_count, int file_size, int block_size_in_bytes, int se_count,
+	int do_read = 1)
 {
     	Cassandra::Init();
     	Cassandra::ClearDb();
@@ -186,13 +187,15 @@ int write_many_files(int files_count, int file_size, int block_size_in_bytes, in
 		printf("w,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, (long)t.first);
 
 		// READ
-		t1 = std::chrono::high_resolution_clock::now();
-    		std::string response;
-    		t = read_file(file_name, response, gk, block_size_in_bytes);
-		t2 = std::chrono::high_resolution_clock::now();
-		tm = duration_cast<milliseconds>(t2 - t1).count();
-		printf("r,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, (long)t.first);
-
+		if (do_read)
+		{
+			t1 = std::chrono::high_resolution_clock::now();
+	    		std::string response;
+    			t = read_file(file_name, response, gk, block_size_in_bytes);
+			t2 = std::chrono::high_resolution_clock::now();
+			tm = duration_cast<milliseconds>(t2 - t1).count();
+			printf("r,%d,%d,%ld,%ld\n", block_size_in_bytes/1024, se_count, tm, (long)t.first);
+		}
 		free(buffer);
 	}
 
@@ -203,12 +206,20 @@ int main(int argc, char **argv)
 {
 	if (argc > 1)
 	{
+		int files_count = std::stoi(argv[2]);
+		int file_size_kb = std::stoi(argv[3]);
+		int block_size_kb = std::stoi(argv[4]);
+		int se_count = std::stoi(argv[5]);
+
 		if (strncmp(argv[1], "-micro", strlen(argv[1])) == 0)
 		{
-			int file_size_kb = std::stoi(argv[2]);
-			int block_size_kb = std::stoi(argv[3]);
-			int se_count = std::stoi(argv[4]);
-			write_many_files(5, file_size_kb * 1024, block_size_kb * 1024, se_count);
+			write_many_files(files_count, file_size_kb * 1024, 
+				block_size_kb * 1024, se_count);
+		}
+		else if (strncmp(argv[1], "-macro", strlen(argv[1])) == 0)
+		{
+			write_many_files(files_count, file_size_kb * 1024, 
+				block_size_kb * 1024, se_count, 0);
 		}
                 else {
 			printf("usage: -micro file_size_kb block_size_kb se_blocks_count\n");

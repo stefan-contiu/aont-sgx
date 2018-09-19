@@ -1,7 +1,12 @@
+workers=("192.168.1.109" "192.168.1.104" "192.168.1.107" "192.168.1.108" "192.168.1.110")
 
-
-donegenerate_micro_load () {
-  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -generate $1
+generate_micro_load () {
+  for i in $(seq 1 $1); do
+    echo GENERATING LOAD $i on ${workers[$i]}
+    ssh -f nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/client/ && ./cli-aont.o -macro 20 16384 4096 $2"
+  done
+  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -macro 20 16384 4096 $2
+  sleep 3s
 }
 
 reset_zk () {
@@ -17,36 +22,45 @@ reset_zk () {
   /home/nuc17/stefan/zk/zookeeper-3.4.12/bin/zkCli.sh rmr /workers
 
   # start master
-  java -cp .:/home/nuc17/stefan/zk/zookeeper-3.4.12/dist-maven/zookeeper-3.4.12.jar:/home/nuc17/stefan/zk/zookeeper-3.4.12/build/lib/slf4j-api-1.7.25.jar:/home/nuc17/stefan/zk/zookeeper-3.4.12/build/lib/slf4j-log4j12-1.7.25.jar:/home/nuc17/stefan/zk/zookeeper-3.4.12/build/lib/log4j-1.2.17.jar:/home/nuc17/stefan/zk/zookeeper-book-example/target/ZooKeeper-Book-0.0.1-SNAPSHOT.jar org.apache.zookeeper.book.Master localhost:2181 &
+  java -cp .:/home/nuc17/stefan/zk/zookeeper-3.4.12/dist-maven/zookeeper-3.4.12.jar:/home/nuc17/stefan/zk/zookeeper-3.4.12/build/lib/slf4j-api-1.7.25.jar:/home/nuc17/stefan/zk/zookeeper-3.4.12/build/lib/slf4j-log4j12-1.7.25.jar:/home/nuc17/stefan/zk/zookeeper-3.4.12/build/lib/log4j-1.2.17.jar:/home/nuc17/stefan/zk/zookeeper-book-example/target/ZooKeeper-Book-0.0.1-SNAPSHOT.jar org.apache.zookeeper.book.Master 192.168.1.102:2181 &
   sleep 5s
 }
 
+
+function machine_workers {
+  ssh nuc@$1 pkill aont_srv
+  for i in $(seq 1 $2); do
+    echo Starting worker... $i on $1
+    ssh -f nuc@$1 "cd /home/nuc/stefan/aont-sgx/server && ./aont_srv 192.168.1.102:2181"
+    sleep 1s
+  done
+}
+
 function reset_workers {
-  pkill aont_srv
   for i in $(seq 1 $1); do
-    echo Starting worker...
-    cd /home/nuc17/stefan/aont-sgx/server && ./aont_srv 127.0.0.1:2181 & sleep 1s
+    machine_workers "${workers[$i]}" 8 
   done
 }
 
 start_admin () {
   # write to output
-  cd /home/nuc17/stefan/aont-sgx/zookeeper && ./admin.out 127.0.0.1:2181 > $1
+  cd /home/nuc17/stefan/aont-sgx/zookeeper && ./admin.out 192.168.1.102:2181 > $1
 }
 
 #### MAIN SCRIPT
-for super in 1 2 3
+for super in 1 # 2 3
 do
   echo "Testing with super blocks: $super"
-  #generate_micro_load $super
-  for w in 2 4 8 
+  generate_micro_load 5 $super
+  for w in 1 2 3 4 5
   do
-    reset_zk
-    reset_workers "$w"
+    echo "Machine(s) with workers : $w"
+    #reset_zk
+    #reset_workers "$w"
     file_name="out"
     file_name="$file_name-$super-"
     file_name="$file_name$w"
-    start_admin "results/$file_name"
+    #start_admin "results/$file_name"
   done
 done
 
