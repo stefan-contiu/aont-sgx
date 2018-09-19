@@ -10,3 +10,4 @@ cd src/c
 make
 sudo make install
 cd ../..
+sudo cp /usr/local/lib/libzookeeper* /usr/lib/x86_64-linux-gnu/
