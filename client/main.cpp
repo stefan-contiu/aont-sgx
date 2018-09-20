@@ -167,10 +167,14 @@ int cassandra_functional_test()
 
 int write_many_files(int files_count, int file_size, int block_size_in_bytes, int se_count,
 	std::string uid,
-	int do_read = 1)
+	int do_read = 1, int do_clear = 1)
 {
     	Cassandra::Init();
-    	Cassandra::ClearDb();
+
+	if (do_clear)
+	{
+    		Cassandra::ClearDb();
+	}
 
 	for(int i=0; i<files_count; i++)
 	{
@@ -222,6 +226,11 @@ int main(int argc, char **argv)
 		{
 			write_many_files(files_count, file_size_kb * 1024, 
 				block_size_kb * 1024, se_count, uid, 0);
+		}
+		else if (strncmp(argv[1], "-append", strlen(argv[1])) == 0)
+		{
+			write_many_files(files_count, file_size_kb * 1024, 
+				block_size_kb * 1024, se_count, uid, 0, 0);
 		}
                 else {
 			printf("usage: -micro file_size_kb block_size_kb se_blocks_count\n");
