@@ -247,21 +247,21 @@ int SGX_CDECL main(int argc, char *argv[])
     }
 
     Cassandra::Init();
-
+/*
     if (argc == 1)
     {
 	// microbenchmarks
 	for (int i=0; i<5; i++)
 	{
-		std::string s("file");
+		std::string s("file_sc_");
 		s.append(std::to_string(i));
 		s.append(".dat");
 
 		time_outside_sgx = 0;
-        	/**/auto t1 = std::chrono::high_resolution_clock::now();
+        	auto t1 = std::chrono::high_resolution_clock::now();
 		time_outside_sgx = re_key((char*)s.c_str());
-        	/**/auto t2 = std::chrono::high_resolution_clock::now(); 
-        	/**/long total_time = duration_cast<milliseconds>(t2 - t1).count();
+        	auto t2 = std::chrono::high_resolution_clock::now(); 
+        	long total_time = duration_cast<milliseconds>(t2 - t1).count();
 		printf("z,,,%ld,%ld\n", total_time, total_time - time_outside_sgx);
 	}
     }
@@ -270,9 +270,11 @@ int SGX_CDECL main(int argc, char *argv[])
 	// normal functioning
 	zk_worker_loop(argc, (char**)argv);
     }
-    
+*/    
     // TODO : hack, force a test re-key
-    //re_key("file2.dat");
+//    re_key_batch("86");
+    for(int i=0; i<100; i++)
+	re_key_batch((char*)std::to_string(i).c_str());
 
     //unsigned char* d;
     //size_t n;

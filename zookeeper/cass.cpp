@@ -173,3 +173,21 @@ void Cassandra::get_block(char* block_name, unsigned char** data, size_t* data_s
     cass_statement_free(statement);
 }
 
+void Cassandra::SavePartition(int partition, std::vector<std::string> batch)
+{
+	for(int i=0; i<batch.size(); i++)
+	{
+	    CassStatement* statement
+        	= cass_statement_new("INSERT INTO part (partition, name) VALUES (?, ?)", 2);
+
+	    cass_statement_bind_int32(statement, 0, partition);
+	    cass_statement_bind_string(statement, 1, batch[i].c_str());
+
+	    CassFuture* query_future = cass_session_execute(session, statement);
+
+	    cass_statement_free(statement);
+	    cass_future_free(query_future);
+	}
+}
+
+

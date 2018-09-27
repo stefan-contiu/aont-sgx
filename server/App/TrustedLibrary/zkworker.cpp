@@ -229,9 +229,12 @@ void process_task(char* task_name)
 	{
 		on_going_tasks.insert(f);
 
-		printf("Re-encryption of File Name : %s\n", file_name);
-		re_key(file_name);
-		// re-key file (get metadata, data from cassandra, use hardcoded old, new gk)
+		printf("Re-encryption of task : %s\n", file_name);
+
+
+		// re_key(file_name);
+		re_key_batch(file_name);
+
 		// usleep(1 * 1000 * 1000);
 
 		// create status znode, so the admin knows that the task is done

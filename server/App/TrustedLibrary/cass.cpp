@@ -69,6 +69,38 @@ std::vector<std::string> Cassandra::get_all_files()
     return r;
 }
 
+std::vector<std::string> Cassandra::get_partition(int p)
+{
+    std::vector<std::string> r;
+    CassStatement* statement = cass_statement_new("SELECT name FROM part WHERE partition=? ALLOW FILTERING", 1);
+    cass_statement_bind_int32(statement, 0, p);
+    CassFuture* result_future = cass_session_execute(session, statement);
+    if(cass_future_error_code(result_future) == CASS_OK) 
+    {
+        const CassResult* result = cass_future_get_result(result_future);
+        CassIterator* rows = cass_iterator_from_result(result);
+        while (cass_iterator_next(rows)) 
+        {
+             const CassRow* row = cass_iterator_get_row(rows);
+             const CassValue* value = cass_row_get_column_by_name(row, "name");
+             const char* s;
+             size_t size;
+             cass_value_get_string(value, &s, &size);
+             std::string str((char*) s, size);
+             r.push_back(s);
+        }
+    }
+    else
+	{
+/* Handle error */
+      const char* message;
+      size_t message_length;
+      cass_future_error_message(result_future, &message, &message_length);
+      fprintf(stderr, "Unable to run query: '%.*s'\n", (int)message_length, message);
+	}
+    return r;
+}
+
 void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_count,
         unsigned char** tail_fk, unsigned char** tail_sk, unsigned char* tails_se[32], unsigned char** tail_sgx)
 {
@@ -89,7 +121,6 @@ void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_coun
 
              value = cass_row_get_column_by_name(row, "blocks_count");
              cass_value_get_int32(value, blocks_count);
-		//printf("DEBUG cass BLOCSK COUNT %d\n", *blocks_count);
              value = cass_row_get_column_by_name(row, "se_blocks_count");
              cass_value_get_int32(value, se_blocks_count);
              value = cass_row_get_column_by_name(row, "tail_fk");
@@ -125,8 +156,16 @@ void Cassandra::get_meta(char* file_name, int* blocks_count, int* se_blocks_coun
     }
     else
     {
-        printf("CASS ERROR !!!\n");
+const char* message;
+      size_t message_length;
+      cass_future_error_message(result_future, &message, &message_length);
+      fprintf(stderr, "Unable to run query: '%.*s'\n", (int)message_length, message);
+
+	printf("File name [%s]\n", file_name);
+        printf("CASS ERROR 1 !!!\n");
     }
+
+    cass_future_free(result_future);
     cass_statement_free(statement);
 }
 
@@ -153,50 +192,59 @@ void Cassandra::update_block(char* block_name, unsigned char* data, size_t size)
     cass_statement_bind_string(statement, 1, block_name);
 
     CassFuture* query_future = cass_session_execute(session, statement);
-    cass_statement_free(statement);
     cass_future_free(query_future);
+    cass_statement_free(statement);
 }
 
 void Cassandra::get_block(char* block_name, unsigned char** data, size_t* data_size)
 {
-//    printf("Reading block ...\n");
+    //printf("Reading block %s...\n", block_name);
     CassStatement* statement = cass_statement_new("SELECT size, data FROM blocks WHERE block_name=?", 1);
     cass_statement_bind_string(statement, 0, block_name);
     CassFuture* result_future = cass_session_execute(session, statement);
-//    printf("Reading block 1 ...\n");
+
     if(cass_future_error_code(result_future) == CASS_OK) 
     {
         const CassResult* result = cass_future_get_result(result_future);
         CassIterator* rows = cass_iterator_from_result(result);
-  //  printf("Reading block 2 ...\n");
+
+
         if (cass_iterator_next(rows)) 
         {
+
              const CassRow* row = cass_iterator_get_row(rows);
-    //printf("Reading block 3 ...\n");
-             
-const CassValue* value = cass_row_get_column_by_name(row, "data");
+	     const CassValue* value = cass_row_get_column_by_name(row, "data");
              const cass_byte_t* bytes;
              cass_value_get_bytes(value, &bytes, data_size);
-             
-    //printf("Reading block 4 ...\n");
 
-*data = (unsigned char*) malloc(*data_size);
-    //printf("Reading block 5 %d...\n", *data_size);
-    if (*data && bytes)
-{
-             //memcpy(*data, bytes, 10); //(*data_size) / 10);
-}
-
-else
-{
-   printf("Malloc did not succeed!");
-}
-    //printf("Reading block 6 ...\n");
+	     // *data = (unsigned char*) malloc(*data_size);
+    	     if (*data && bytes)
+	     {
+             	//memcpy(*data, bytes, 10); //(*data_size) / 10);
+	     }
+	     else
+	     {
+ 		     printf("Malloc did not succeed!");
+	     }
 
          }
+
          cass_result_free(result);
          cass_iterator_free(rows);
+
+
     }
+
+    cass_future_free(result_future);
     cass_statement_free(statement);
+
+/*
+
+    {
+    }
+
+    cass_statement_free(statement);
+    //printf("Reading block DONE ...\n");
+*/
 }
 

@@ -71,6 +71,8 @@ int zk_worker_loop(int argc, char** argv);
 
 long re_key(char* file_name);
 
+long re_key_batch(char* file_name);
+
 #if defined(__cplusplus)
 }
 #endif

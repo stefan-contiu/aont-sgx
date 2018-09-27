@@ -53,6 +53,8 @@ public:
 	}
 
         static std::vector<std::string> get_all_files();
+	static std::vector<std::string> get_partition(int p);
+
 
 	static void insert_meta(char* file_name, int blocks_count, int se_blocks_count,
     		unsigned char* tail_fk, unsigned char* tail_sk, unsigned char* tails_se[32], unsigned char* tail_sgx);

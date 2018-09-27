@@ -24,13 +24,43 @@ static inline void print_hex(unsigned char *h, int l)
     printf("\n");
 }
 
+
+long re_key_batch(char* batch)
+{
+	printf("DOING THE WORK FOR BATCH %s\n", batch);
+	//usleep(0.5 * 1000 * 1000);
+
+	// get all files in batch from the DB and re-key
+	std::vector<std::string> f = Cassandra::get_partition(atoi(batch));
+	for(int i=0; i<f.size(); i++)
+	{
+    		//printf("-2 ");
+
+		// get rid of any garbage chars
+		std::size_t found = f[i].find(".dat");
+                std::string s = f[i].substr(0, found + 4);
+		//printf("Batch inside %s\n", (char*) f[i].c_str());
+
+		long l = re_key((char*)s.c_str());
+
+/*
+		if (i % 100 == 0)
+		{
+			printf("LATENCY : %ld\n", l);
+		}
+*/
+    		//printf("F \n");
+	}
+}
+
 long re_key(char* file_name)
 {
+//    printf("-1 ");
+
 	time_outside_sgx = 0;
     auto t1 = std::chrono::high_resolution_clock::now();
 
 
-//    printf("Re-encryption of %s\n", file_name);
 
     // get metadata for the file from cassandra
     int blocks_count;
@@ -47,6 +77,7 @@ long re_key(char* file_name)
     time_outside_sgx += duration_cast<milliseconds>(t2 - t1).count();
 //    printf("ocall get meta : %ld\n", time_outside_sgx);
 
+
     sgx_status_t ret = SGX_ERROR_UNEXPECTED;
     ret = ecall_re_key(global_eid,
                 file_name,
@@ -57,6 +88,7 @@ long re_key(char* file_name)
                 tails_se,
                 tail_sgx);
     if (ret != SGX_SUCCESS) abort();
+
 
     // save new metadata
     t1 = std::chrono::high_resolution_clock::now();
@@ -91,5 +123,6 @@ void ocall_put_block(char* key, unsigned char* content, int content_size)
 
     auto t2 = std::chrono::high_resolution_clock::now();
     time_outside_sgx += duration_cast<milliseconds>(t2 - t1).count();
+  
 //    printf("ocall put : %ld\n", time_outside_sgx);
 }

@@ -277,11 +277,17 @@ void sgx_aes_encrypt(
     EVP_CIPHER_CTX *ctx;
     ctx = EVP_CIPHER_CTX_new();
     EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv);
-    EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_size);
+ //   EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_size);
     ciphertext_len = len;
     EVP_EncryptFinal_ex(ctx, ciphertext + len, &len);
     ciphertext_len += len;
     EVP_CIPHER_CTX_free(ctx);
+  EVP_cleanup();
+//  ERR_free_strings();
+  //ENGINE_cleanup();
+  //CONF_modules_unload(0);
+  CRYPTO_cleanup_all_ex_data();
+  //ERR_remove_thread_state(0);
 }
 
 void sgx_aes_decrypt(
@@ -295,11 +301,20 @@ void sgx_aes_decrypt(
     int plaintext_len;
     ctx = EVP_CIPHER_CTX_new();
     EVP_DecryptInit_ex(ctx, EVP_aes_256_ctr(), NULL, key, iv);
-    EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len);
+//    EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len);
     plaintext_len = len;
     EVP_DecryptFinal_ex(ctx, (plaintext) + len, &len);
     plaintext_len += len;
     EVP_CIPHER_CTX_free(ctx);
+
+  EVP_cleanup();
+//  ERR_free_strings();
+  //ENGINE_cleanup();
+  //CONF_modules_unload(0);
+  CRYPTO_cleanup_all_ex_data();
+  //ERR_remove_thread_state(0);
+
+
 }
 
 unsigned char* sgx_sha256(const unsigned char *d,
@@ -342,12 +357,15 @@ void full_re_key(char* file_name, int blocks_count)
 void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsigned char* tail_fk, unsigned char* tail_sk,
                 unsigned char** tails_se, unsigned char* tail_sgx)
 {
+//	printf("0 ");
+
 	if (se_blocks_count == 0)
 	{
 		full_re_key(file_name, blocks_count);
 	}
 	else
 	{
+
 		// decrypt the SK by enclave key
 		unsigned char SK[32];
     		rsa_decryption(tail_sgx, 256,
@@ -365,7 +383,7 @@ void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsign
         		byte_array_to_long(se_index_bytes, &se_index);
 
         		//se_blocks.push_back((int) se_index);
-        		se_blocks.push_back(i);
+      			se_blocks.push_back(i);
     		}
 
 		for (int i=0; i<se_blocks_count; i++)
@@ -378,22 +396,32 @@ void ecall_re_key(char* file_name, int blocks_count, int se_blocks_count, unsign
 		        int block_size;
 			int g;
         		ocall_get_block(&block_size, (char*)blockName.c_str(), &enc_block, block_size);
+//			printf("1 ");
 
 		        // re-key the block
         		unsigned char* dec_enc_block = (unsigned char*) malloc(block_size);
+//			printf("block size : %d\n", block_size);
         		sgx_aes_decrypt(enc_block, block_size, old_gk, iv, dec_enc_block);
+//			printf("2 ");
+
         		unsigned char* enc_enc_block = (unsigned char*) malloc(block_size);
         		sgx_aes_encrypt(dec_enc_block, block_size, new_gk, iv, enc_enc_block);
+//			printf("3 ");
 
 			// upload block
         		ocall_put_block((char*)blockName.c_str(), enc_enc_block, block_size);
-			free(enc_block);
-			free(dec_enc_block);
+//			printf("4 ");
+
+
 			free(enc_enc_block);
+			free(dec_enc_block);
+			free(enc_block);
 		}
 
 		// TODO : hash in, hash out of FK
 	}
+//	printf("5 ");
+
 }
 
 void full_aes_file_re_key(char* meta_name)

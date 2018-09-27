@@ -279,12 +279,52 @@ void create_tasks()
 
 		snprintf(task_name, 32, "/tasks/task-%s\0", s.c_str());
 		//printf("Creating task : %s\n", task_name);
-		create_znode(task_name);
+//		create_znode(task_name);
 	}
 
 	Cassandra::Bye();
 }
 
+void create_batches(int batch_count)
+{
+        // TODO : query cassandra metadata and get all the file names
+        Cassandra::Init();
+        std::vector<std::string> f = Cassandra::get_all_files();
+
+        // clear batches in DB
+        Cassandra::ClearPartitions();
+
+        // split the files in configured batches
+        printf("TOTAL FILES : %d\n", f.size());
+        int batch_size = f.size() / batch_count;
+        printf("BATCH SIZE : %d\n", batch_size);
+	total_tasks = batch_count;
+	
+        for (int i=0; i<batch_count; i++)
+        {
+                std::vector<std::string> batch;
+                for (int j=0; j<batch_size; j++)
+                {
+                        int index = (i * batch_size) + j;
+                        if (index < f.size())
+                                batch.push_back(f[index]);
+                }
+
+                printf("Creating batch ... %d, size %d\n", i, batch.size());
+
+                // save batch to DB
+                Cassandra::SavePartition(i, batch);
+
+                // push batch to cassandra
+                char task_name[32];
+                snprintf(task_name, 32, "/tasks/task-%d\0", i);
+                printf("Creating task : %s\n", task_name);
+                create_znode(task_name);
+        }
+
+        Cassandra::Bye();
+        printf("BATCHES CREATED\n");
+}
 
 
 void status_watcher (zhandle_t *zh,
@@ -423,14 +463,15 @@ int main(int argc, char **argv) {
 	if (CLIENT_WAKE_UP)
 	{
 		CLIENT_WAKE_UP = 0;
-		create_tasks();
+		//create_tasks();
+		create_batches(100);
 	}
 
 	// sleep 100 miliseconds
 	usleep(100 * 1000);
 
 	// wath the status of tasks reported by workers
-//	printf("Checking the status of all tasks %d out of %d...\n", status_done.size(), total_tasks);
+	printf("Checking the status. Done: %d out of %d...\n", status_done.size(), total_tasks);
 	watch_tasks_status();
 	if (status_done.size() == total_tasks)
 	{

@@ -42,7 +42,16 @@ public:
 
 		cass_statement_free(statement);
     		cass_future_free(query_future);
+	}
 
+	static void ClearPartitions()
+	{
+		CassStatement* statement = cass_statement_new("TRUNCATE part", 0);
+    		CassFuture* query_future = cass_session_execute(session, statement);
+    		CassError rc = cass_future_error_code(query_future);
+
+		cass_statement_free(statement);
+    		cass_future_free(query_future);
 	}
 
 	static void Bye()
@@ -63,6 +72,9 @@ public:
 	static void insert_block(char* block_name, unsigned char* data, size_t size);
 	static void update_block(char* block_name, unsigned char* data, size_t size);
 	static void get_block(char* block_name, unsigned char** data, size_t* data_size);
+
+	static void SavePartition(int partition, std::vector<std::string> batch);
+
 };
 
 #endif

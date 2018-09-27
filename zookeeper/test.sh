@@ -1,12 +1,33 @@
 workers=("192.168.1.109" "192.168.1.104" "192.168.1.107" "192.168.1.108" "192.168.1.110")
 
-generate_micro_load () {
-  for i in $(seq 1 $1); do
-    echo GENERATING LOAD $i on ${workers[$i]}
-    ssh -f nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/client/ && ./cli-aont.o -macro 20 16384 4096 $2"
+update_git() {
+  for i in $(seq 0 $1); do
+    echo UPDATE $i on ${workers[$i]}
+    ssh nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/ && git pull origin master && cd client && make"
+    #ssh nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/server && make SGX=1"
   done
-  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -macro 20 16384 4096 $2
-  sleep 3s
+}
+
+generate_micro_load () {
+  files_count=500
+
+  # first call clears the db, then only append
+  
+  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -macro a17 $files_count 1024 256 $2 &
+  sleep 5s
+
+  for i in $(seq 0 $1); do
+    echo GENERATING LOAD $i on ${workers[$i]}
+    ssh -f nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/client/ && ./cli-aont.o -append a$i $files_count 1024 256 $2"
+    ssh -f nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/client/ && ./cli-aont.o -append b$i $files_count 1024 256 $2"
+    ssh -f nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/client/ && ./cli-aont.o -append c$i $files_count 1024 256 $2"
+    ssh -f nuc@"${workers[$i]}" "cd /home/nuc/stefan/aont-sgx/client/ && ./cli-aont.o -append d$i $files_count 1024 256 $2"
+  done
+ 
+  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -append b17 $files_count 1024 256 $2 &
+  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -append c17 $files_count 1024 256 $2 &
+  /home/nuc17/stefan/aont-sgx/client/cli-aont.o -append d17 $files_count 1024 256 $2
+  sleep 5s
 }
 
 reset_zk () {
@@ -38,7 +59,7 @@ function machine_workers {
 
 function reset_workers {
   for i in $(seq 1 $1); do
-    machine_workers "${workers[$i]}" 8 
+    machine_workers "${workers[$i]}" 2
   done
 }
 
@@ -48,19 +69,20 @@ start_admin () {
 }
 
 #### MAIN SCRIPT
-for super in 1 # 2 3
+#update_git 5
+for super in 1 #2 3
 do
   echo "Testing with super blocks: $super"
-  generate_micro_load 5 $super
-  for w in 1 2 3 4 5
+#  generate_micro_load 5 $super
+  for w in 1 #2 3 4 5
   do
     echo "Machine(s) with workers : $w"
-    #reset_zk
-    #reset_workers "$w"
+    reset_zk
+    reset_workers "$w"
     file_name="out"
     file_name="$file_name-$super-"
     file_name="$file_name$w"
-    #start_admin "results/$file_name"
+    start_admin "results/$file_name"
   done
 done
 
