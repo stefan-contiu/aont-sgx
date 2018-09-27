@@ -247,7 +247,7 @@ int SGX_CDECL main(int argc, char *argv[])
     }
 
     Cassandra::Init();
-/*
+
     if (argc == 1)
     {
 	// microbenchmarks
@@ -270,11 +270,10 @@ int SGX_CDECL main(int argc, char *argv[])
 	// normal functioning
 	zk_worker_loop(argc, (char**)argv);
     }
-*/    
+
     // TODO : hack, force a test re-key
-//    re_key_batch("86");
-    for(int i=0; i<100; i++)
-	re_key_batch((char*)std::to_string(i).c_str());
+    //for(int i=0; i<100; i++)
+	//	re_key_batch((char*)std::to_string(i).c_str());
 
     //unsigned char* d;
     //size_t n;
